@@ -300,6 +300,9 @@ export function evaluateModel(model, overrides) {
       throw new Error('Unknown operation "' + op + '"');
     }
     if (block.type === 'formula') {
+      if (!block.expr || !String(block.expr).trim()) {
+        throw new Error('Formula "' + blockTitle(block) + '" needs an expression');
+      }
       const env = {};
       for (const p of block.inputs || []) {
         const wire = wireInto(model, block.id, p.id);
@@ -482,6 +485,10 @@ export function validateModel(model) {
   }
   for (const b of model.blocks) {
     if (b.type !== 'formula') continue;
+    if (!b.expr || !String(b.expr).trim()) {
+      issues.push('Formula "' + blockTitle(b) + '" needs an expression.');
+      continue;
+    }
     try {
       const ast = parseExpr(b.expr || '');
       const names = collectNames(ast);

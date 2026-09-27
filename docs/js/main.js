@@ -1,7 +1,7 @@
 // main.js — application controller: palette, inspector, sensitivity, persistence.
 import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, newId } from './engine.js';
 import { COMMON_UNITS, formatValue, formatNumber } from './units.js';
-import { createCanvas } from './canvas.js';
+import { createCanvas, blockRect } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
 
 const STORE_KEY = 'ufa.model.v1';
@@ -153,6 +153,24 @@ function deleteBlock(id) {
   toast('Block deleted.');
 }
 
+function findFreeSpot(x, y) {
+  const w = 240;
+  const h = 165;
+  const rects = model.blocks.map(blockRect);
+  let px = x;
+  let py = y;
+  for (let i = 0; i < 80; i++) {
+    const clashing = rects.some(function (r) {
+      return px < r.x + r.w + 18 && px + w > r.x - 18 && py < r.y + r.h + 18 && py + h > r.y - 18;
+    });
+    if (!clashing) return { x: Math.round(px), y: Math.round(py) };
+    px += 46;
+    py += 38;
+    if (i % 6 === 5) { px = x - Math.floor(i / 6) * 70; py = y + Math.floor(i / 6) * 52; }
+  }
+  return { x: Math.round(x), y: Math.round(y) };
+}
+
 function addBlock(type) {
   if (type === 'result' && model.blocks.some(function (b) { return b.type === 'result'; })) {
     const existing = model.blocks.find(function (b) { return b.type === 'result'; });
@@ -162,7 +180,8 @@ function addBlock(type) {
     return;
   }
   const c = canvasView.centerPoint();
-  const block = makeBlock(type, c.x - 106 + (model.blocks.length % 4) * 22, c.y - 60 + (model.blocks.length % 4) * 22);
+  const spot = findFreeSpot(c.x - 106, c.y - 60);
+  const block = makeBlock(type, spot.x, spot.y);
   if (type === 'result') block.title = 'Result';
   model.blocks.push(block);
   saveSoon();
@@ -244,6 +263,10 @@ function settingsHtml(block) {
     return '<button type="button" class="chip" data-chip="' + escapeHtml(u) + '">' + escapeHtml(u) + '</button>';
   }).join('');
   let html = '';
+  const status = values[block.id];
+  if (status && status.error) {
+    html += '<div class="issue">' + escapeHtml(status.error) + '</div>';
+  }
   if (block.type === 'input') {
     html += field('Name', '<input type="text" data-field="name" value="' + escapeHtml(block.name || '') + '" spellcheck="false">');
     html += '<div class="field-row">' +
@@ -399,6 +422,7 @@ document.getElementById('btnNew').addEventListener('click', function () {
 });
 
 document.getElementById('btnFit').addEventListener('click', function () { canvasView.fit(); });
+document.getElementById('btnZoomFit').addEventListener('click', function () { canvasView.fit(); });
 document.getElementById('btnZoomIn').addEventListener('click', function () { canvasView.zoomBy(1.22); });
 document.getElementById('btnZoomOut').addEventListener('click', function () { canvasView.zoomBy(1 / 1.22); });
 document.getElementById('btnZoomReset').addEventListener('click', function () { canvasView.resetZoom(); });

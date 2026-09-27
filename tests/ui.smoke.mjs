@@ -89,6 +89,8 @@ ok('setField op', setField('op', 'mul'));
 
 palette('result');
 ok('result block added', groups().length === 4);
+ok('cards show short reason, not bare error', svg.innerHTML.indexOf('connect a') >= 0 && svg.innerHTML.indexOf('connect in') >= 0, svg.innerHTML.slice(0, 0));
+ok('accent edge is clipped to card corners', svg.innerHTML.indexOf('clip-') >= 0);
 setField('title', 'Profit');
 
 const ids = groups().map(function (g) { return g.getAttribute('data-block'); });

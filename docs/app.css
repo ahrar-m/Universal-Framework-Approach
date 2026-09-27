@@ -263,6 +263,8 @@ body {
 }
 @media (max-width: 860px) {
   body { overflow: auto; }
+  .actions { flex-wrap: wrap; overflow-x: visible; }
+  .btn { padding: 6px 10px; font-size: 12px; }
   .topbar { height: auto; min-height: var(--topbar-h); flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
   .brand-name { display: none; }
   .model-name { flex: 1 1 120px; }
@@ -279,7 +281,7 @@ body {
   }
   .palette.open, .side.open { transform: translateY(0); }
   .fab-row { display: block; }
-  .zoom-controls { bottom: 20px; }
+  .zoom-controls { bottom: 18px; left: 14px; right: auto; }
 }
 @media (min-width: 861px) {
   .sheet-scrim { display: none; }

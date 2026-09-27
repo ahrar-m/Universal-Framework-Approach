@@ -39,6 +39,7 @@ Everything runs client-side: no build step, no dependencies, no network calls.
 | `docs/methodology.html` | The approach + a from-scratch walkthrough |
 | `tests/engine.test.mjs` | Engine unit tests (units, expressions, evaluation, sensitivity) |
 | `tests/ui.smoke.mjs` | Boots the real app in jsdom and drives it like a user |
+| `tests/render-sample.mjs` | Renders a realistic model through the app and writes SVG/PNG for visual review |
 | `.github/workflows/pages.yml` | Deploys `docs/` to GitHub Pages on every push to `main` |
 
 ## Local development
@@ -63,6 +64,13 @@ The UI smoke test drives the actual page in jsdom (install it once, anywhere):
 ```bash
 npm install jsdom          # e.g. in ~/ufa-smoke
 DSH_SMOKE_DIR=~/ufa-smoke node tests/ui.smoke.mjs
+```
+
+To render a sample model for a visual check (writes `sample.svg` / `sample.png`):
+
+```bash
+OUT_DIR=~ DSH_SMOKE_DIR=~/ufa-smoke node tests/render-sample.mjs
+rsvg-convert -w 1500 ~/sample.svg -o ~/sample.png
 ```
 
 ## Deploying

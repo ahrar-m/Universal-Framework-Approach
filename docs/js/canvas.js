@@ -20,6 +20,19 @@ function esc(text) {
     .split('"').join('&quot;');
 }
 
+function shortError(text) {
+  const t = String(text || '');
+  const quoted = t.split('"').filter(function (s, i) { return i % 2 === 1; });
+  if (t.indexOf('not connected') >= 0) return quoted[0] ? 'connect ' + quoted[0] : 'not connected';
+  if (t.indexOf('not an input') >= 0) return quoted[1] ? 'no input ' + quoted[1] : 'check inputs';
+  if (t.indexOf('needs an expression') >= 0) return 'needs an expression';
+  if (t.indexOf('needs a number') >= 0) return 'needs a number';
+  if (t.indexOf('Division by zero') >= 0) return 'divide by zero';
+  if (t.indexOf('different kinds') >= 0) return 'unit mismatch';
+  if (t.indexOf('loop') >= 0) return 'wiring loop';
+  return t.length > 20 ? t.slice(0, 19) + '…' : t;
+}
+
 function trunc(text, n) {
   const s = String(text === undefined ? '' : text);
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
@@ -175,8 +188,9 @@ export function createCanvas(opts) {
     if (selected) {
       out.push('<rect x="-5" y="-5" width="' + (g.w + 10) + '" height="' + (g.h + 10) + '" rx="18" fill="none" stroke="' + stroke + '" stroke-opacity="0.28" stroke-width="1.4" />');
     }
-    // header accent bar
-    out.push('<rect x="1" y="1" width="' + (g.w - 2) + '" height="4" rx="2" fill="' + meta.color + '" opacity="0.75" />');
+    // header accent edge — clipped to the card's rounded corners so it hugs the top
+    out.push('<clipPath id="clip-' + esc(block.id) + '"><rect x="0" y="0" width="' + g.w + '" height="' + g.h + '" rx="14" /></clipPath>');
+    out.push('<rect x="1" y="1" width="' + (g.w - 2) + '" height="5" fill="' + meta.color + '" opacity="0.9" clip-path="url(#clip-' + esc(block.id) + ')" />');
 
     // header text
     out.push('<text x="14" y="22" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.6" fill="' + meta.color + '" opacity="0.95">' + meta.label + '</text>');
@@ -204,7 +218,7 @@ export function createCanvas(opts) {
     // footer value
     const fy = g.headerH + g.rows * g.rowH;
     out.push('<line x1="10" y1="' + fy + '" x2="' + (g.w - 10) + '" y2="' + fy + '" stroke="rgba(110,168,254,0.16)" />');
-    const display = val ? (val.error ? 'error' : val.display) : '—';
+    const display = val ? (val.error ? shortError(val.error) : val.display) : '—';
     const valueColor = hasError ? '#fc8181' : '#eaf1ff';
     if (block.type === 'result') {
       out.push('<text x="14" y="' + (fy + 15) + '" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.4" fill="#8fa0c4">FINAL RESULT</text>');
