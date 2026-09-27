@@ -40,12 +40,14 @@ const model = {
     { id: 'w9', from: 'op_profit', to: 'res', toPort: 'in' }
   ]
 };
-win.localStorage.setItem('ufa.model.v1', JSON.stringify(model));
+const picked = process.env.EXAMPLE ? (await import(pathToFileURL(root + 'docs/js/examples.js').href)).EXAMPLES.find((e) => e.id === process.env.EXAMPLE) : null;
+const useModel = picked ? picked.model : model;
+win.localStorage.setItem('ufa.model.v1', JSON.stringify(useModel));
 
 await import(pathToFileURL(root + 'docs/js/main.js').href);
 const { buildSvgString } = await import(pathToFileURL(root + 'docs/js/exporter.js').href);
 const svg = doc.getElementById('canvas');
-const out = buildSvgString(svg, model);
+const out = buildSvgString(svg, useModel);
 await fsP.writeFile(process.env.OUT_DIR + '/sample.svg', out, 'utf8');
 const sens = doc.getElementById('sensitivityBody').textContent;
 console.log('RESULT_TEXT: ' + sens.slice(0, 120));

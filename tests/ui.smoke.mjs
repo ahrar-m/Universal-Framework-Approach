@@ -150,6 +150,18 @@ const svgString = buildSvgString(svg, stored);
 ok('svg export is standalone', svgString.indexOf('<?xml') === 0 && svgString.indexOf('viewBox=') > 0, svgString.slice(0, 120));
 ok('svg export sized', /width="[0-9]+"/.test(svgString) && /height="[0-9]+"/.test(svgString));
 
+// examples load from the palette
+clickSel(doc.querySelector('.palette-item[data-example="profit"]'));
+ok('example replaces the model', groups().length === 9, String(groups().length));
+ok('example computes $27,700', doc.getElementById('sensitivityBody').innerHTML.indexOf('$27,700') >= 0, doc.getElementById('sensitivityBody').innerHTML.slice(0, 160));
+ok('example name set', doc.getElementById('modelName').value === 'Monthly profit', doc.getElementById('modelName').value);
+
+// clear site data
+clickSel(doc.getElementById('btnClear'));
+ok('clear empties the canvas', groups().length === 0, String(groups().length));
+await new Promise((r) => setTimeout(r, 500));
+ok('clear empties storage and nothing re-saves', localStorage.getItem('ufa.model.v1') === null, String(localStorage.getItem('ufa.model.v1')));
+
 console.log('passed: ' + passed + '   failed: ' + failures.length);
 for (const f of failures) console.log('  FAIL ' + f);
 if (failures.length) process.exit(1);

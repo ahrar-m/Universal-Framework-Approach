@@ -2,6 +2,7 @@
 import { parseUnit, formatValue, sameDims, combineMul, combineDiv, isRatio } from '../docs/js/units.js';
 import { parseExpr, evalNumber, collectNames } from '../docs/js/expr.js';
 import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel } from '../docs/js/engine.js';
+import { EXAMPLES } from '../docs/js/examples.js';
 
 let passed = 0;
 const failures = [];
@@ -197,6 +198,19 @@ function model(build) {
   ok('validate catches duplicate names', issues.some((e) => e.indexOf('share the name') >= 0), JSON.stringify(issues));
   ok('validate catches bad range', issues.some((e) => e.indexOf('not above its min') >= 0), JSON.stringify(issues));
 }
+
+// ---- ready-made examples ----
+for (const ex of EXAMPLES) {
+  const r = evaluateModel(ex.model);
+  ok('example "' + ex.name + '" evaluates', r.ok, JSON.stringify(r.errors));
+  ok('example "' + ex.name + '" ranks its drivers', sensitivity(ex.model, r.result).rows.length >= 3, String(sensitivity(ex.model, r.result).rows.length));
+}
+const exProfit = evaluateModel(EXAMPLES.find((e) => e.id === 'profit').model);
+ok('example profit is $27,700', exProfit.result.display === '$27,700', exProfit.result.display);
+const exEff = evaluateModel(EXAMPLES.find((e) => e.id === 'efficiency').model);
+ok('example efficiency is 72.6364%', exEff.result.display === '72.6364%', exEff.result.display);
+const exDesign = evaluateModel(EXAMPLES.find((e) => e.id === 'design').model);
+ok('example design score is 7.3', exDesign.result.display === '7.3', exDesign.result.display);
 
 console.log('passed: ' + passed + '   failed: ' + failures.length);
 for (const f of failures) console.log('  FAIL ' + f);

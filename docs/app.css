@@ -139,6 +139,8 @@ body {
 .swatch-op { background: var(--op-c); box-shadow: 0 0 10px rgba(246, 173, 85, 0.5); }
 .swatch-formula { background: var(--formula-c); box-shadow: 0 0 10px rgba(183, 148, 244, 0.5); }
 .swatch-result { background: var(--result-c); box-shadow: 0 0 10px rgba(104, 211, 145, 0.5); }
+.swatch-example { background: linear-gradient(135deg, var(--accent), var(--formula-c)); box-shadow: 0 0 10px rgba(110, 168, 254, 0.45); }
+.panel-title-spaced { margin-top: 26px; }
 .palette-text { display: flex; flex-direction: column; gap: 2px; }
 .palette-text strong { font-size: 13.5px; }
 .palette-text em { font-style: normal; color: var(--muted); font-size: 11.5px; line-height: 1.4; }

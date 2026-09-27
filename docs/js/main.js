@@ -3,6 +3,7 @@ import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blo
 import { COMMON_UNITS, formatValue, formatNumber } from './units.js';
 import { createCanvas, blockRect } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
+import { EXAMPLES } from './examples.js';
 
 const STORE_KEY = 'ufa.model.v1';
 
@@ -169,6 +170,42 @@ function findFreeSpot(x, y) {
     if (i % 6 === 5) { px = x - Math.floor(i / 6) * 70; py = y + Math.floor(i / 6) * 52; }
   }
   return { x: Math.round(x), y: Math.round(y) };
+}
+
+function loadExample(id) {
+  const ex = EXAMPLES.find(function (e) { return e.id === id; });
+  if (!ex) return;
+  if (model.blocks.length && !confirm('Load the "' + ex.name + '" example? It replaces the model on screen. Export yours as JSON first if you want to keep it.')) return;
+  model = JSON.parse(JSON.stringify(ex.model));
+  model.name = ex.name;
+  els.modelName.value = model.name;
+  canvasView.clearSelection();
+  renderSettings(null);
+  saveSoon();
+  recompute();
+  canvasView.fit();
+  closeSheets();
+  toast('Loaded the ' + ex.name + ' example.');
+}
+
+function clearSiteData() {
+  if (!confirm('Clear the data this site saved in your browser? The model on screen is removed from this device. Anything you exported as JSON is unaffected.')) return;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  try {
+    localStorage.removeItem(STORE_KEY);
+  } catch (err) {
+    // ignore: storage may be unavailable
+  }
+  model = defaultModel('Untitled model');
+  els.modelName.value = model.name;
+  canvasView.clearSelection();
+  renderSettings(null);
+  recompute();
+  canvasView.fit();
+  toast('Saved data cleared.');
 }
 
 function addBlock(type) {
@@ -404,11 +441,19 @@ els.modelName.addEventListener('input', function () {
   saveSoon();
 });
 
-document.querySelectorAll('.palette-item').forEach(function (item) {
+document.querySelectorAll('.palette-item[data-type]').forEach(function (item) {
   item.addEventListener('click', function () {
     addBlock(item.getAttribute('data-type'));
   });
 });
+
+document.querySelectorAll('.palette-item[data-example]').forEach(function (item) {
+  item.addEventListener('click', function () {
+    loadExample(item.getAttribute('data-example'));
+  });
+});
+
+document.getElementById('btnClear').addEventListener('click', clearSiteData);
 
 document.getElementById('btnNew').addEventListener('click', function () {
   if (model.blocks.length && !confirm('Start a new model? The current one stays only in this browser until you export it.')) return;

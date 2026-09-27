@@ -23,6 +23,7 @@
       <button type="button" id="btnExportPng" class="btn">Export PNG</button>
       <a class="btn btn-link" href="methodology.html">Docs</a>
       <button type="button" id="btnFit" class="btn btn-icon" title="Fit the model in view">Fit</button>
+      <button type="button" id="btnClear" class="btn btn-danger" title="Delete everything this site saved in your browser">Clear data</button>
     </nav>
     <div class="save-state" id="saveState" title="Autosaved in this browser">saved</div>
   </header>
@@ -49,6 +50,22 @@
           <span class="palette-text"><strong>Result</strong><em>The final outcome of the model</em></span>
         </button>
       </div>
+      <h2 class="panel-title panel-title-spaced">Examples</h2>
+      <p class="panel-sub">Load a finished model, then take it apart and change it.</p>
+      <div class="palette-list">
+        <button type="button" class="palette-item" data-example="profit">
+          <span class="swatch swatch-example"></span>
+          <span class="palette-text"><strong>Monthly profit</strong><em>Price x volume minus costs, with ranges for sensitivity</em></span>
+        </button>
+        <button type="button" class="palette-item" data-example="efficiency">
+          <span class="swatch swatch-example"></span>
+          <span class="palette-text"><strong>Line efficiency</strong><em>Shift minutes to good units to attainment</em></span>
+        </button>
+        <button type="button" class="palette-item" data-example="design">
+          <span class="swatch swatch-example"></span>
+          <span class="palette-text"><strong>Design score</strong><em>A weighted product-design score in one formula</em></span>
+        </button>
+      </div>
       <div class="palette-help">
         <strong>Wiring</strong>
         Drag from the round port on the right of a block to a port on the left of the next one.
@@ -60,7 +77,7 @@
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Model canvas"></svg>
       <div class="stage-hint" id="stageHint">
         <strong>Start here</strong>
-        Add a <em>Value input</em> from the Blocks palette, then wire it into a <em>Result</em>.
+        Add a <em>Value input</em> from the Blocks palette, then wire it into a <em>Result</em> — or load an <em>Example</em> to take apart.
       </div>
       <div class="zoom-controls" aria-hidden="false">
         <button type="button" id="btnZoomOut" class="btn btn-icon" title="Zoom out">−</button>

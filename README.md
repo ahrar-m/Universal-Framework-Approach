@@ -19,7 +19,9 @@ tool tells you **which input actually drives the result**.
 | Domain-agnostic units | Knows `$`, `k$`, `M$`, `%`, `x`, `units`, `users`, `customers`, `hrs`, `min`, `days`, `$/unit`, `units/hrs`, `$/hrs` — and any other word you type becomes its own unit |
 | Live values | Every block and wire shows its current value while you edit |
 | Sensitivity ranking | "What moves the result": inputs ranked by their effect on the final number (min→max swing when a range is given, otherwise a +1% change) |
+| Examples | Three ready-made models — **Monthly profit**, **Line efficiency**, **Design score** — loadable from the Blocks palette to take apart |
 | Export | Crisp vector **SVG**, high-resolution **PNG** (3x), and **JSON** model files in/out |
+| Clear data | One button deletes everything the site saved in your browser |
 | Persistence | Autosaves to the browser (localStorage); JSON export/import moves models between devices |
 
 Everything runs client-side: no build step, no dependencies, no network calls.
@@ -36,6 +38,7 @@ Everything runs client-side: no build step, no dependencies, no network calls.
 | `docs/js/canvas.js` | SVG node-graph rendering and pointer interaction |
 | `docs/js/exporter.js` | SVG / PNG / JSON export and import |
 | `docs/js/main.js` | Application controller: palette, inspector, persistence |
+| `docs/js/examples.js` | Ready-made example models |
 | `docs/methodology.html` | The approach + a from-scratch walkthrough |
 | `tests/engine.test.mjs` | Engine unit tests (units, expressions, evaluation, sensitivity) |
 | `tests/ui.smoke.mjs` | Boots the real app in jsdom and drives it like a user |
