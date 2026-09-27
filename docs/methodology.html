@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methodology - Universal Framework Approach</title>
+<meta name="description" content="How the Universal Framework Approach models any metric as one main equation built from small blocks - value inputs, operations, formulas and a result - with live values, dimensional unit checking and sensitivity analysis. Includes a from-scratch walkthrough of the tool.">
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --panel: #121a2e;
+    --border: rgba(110, 168, 254, 0.18);
+    --text: #e8ecf8;
+    --muted: #8fa0c4;
+    --accent: #6ea8fe;
+    --teal: #4fd1c5;
+    --amber: #f6ad55;
+    --violet: #b794f4;
+    --green: #68d391;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 2.25rem 1.25rem 4.5rem; }
+  h1 {
+    font-size: clamp(1.85rem, 6.5vw, 2.6rem);
+    line-height: 1.12;
+    letter-spacing: -0.022em;
+    margin: 0.25rem 0 1rem;
+  }
+  h2 {
+    font-size: clamp(1.35rem, 4.5vw, 1.75rem);
+    line-height: 1.25;
+    letter-spacing: -0.012em;
+    margin: 3.25rem 0 0.85rem;
+  }
+  h3 {
+    font-size: 1.06rem;
+    line-height: 1.4;
+    margin: 1.9rem 0 0.5rem;
+    letter-spacing: 0.005em;
+  }
+  p { margin: 0 0 1.15rem; }
+  ul, ol { margin: 0 0 1.35rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.7rem; }
+  li:last-child { margin-bottom: 0; }
+  strong { font-weight: 650; }
+  a { color: var(--accent); }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: rgba(110, 168, 254, 0.10);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.08em 0.38em;
+    white-space: nowrap;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.65rem;
+  }
+  .lede { font-size: 1.14rem; line-height: 1.65; }
+  .muted { color: var(--muted); }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #0a0f1e;
+    font-weight: 680;
+    font-size: 1.02rem;
+    text-decoration: none;
+    padding: 0.85rem 1.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+  }
+  .btn:hover { background: #8ab8ff; }
+  .btn-row { margin: 1.75rem 0 0; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.35rem 1.4rem;
+    margin: 1.35rem 0;
+  }
+  .card h3 { margin-top: 0; }
+  .card p:last-child, .card ul:last-child, .card ol:last-child { margin-bottom: 0; }
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    margin-bottom: 0.55rem;
+  }
+  .chip-teal   { color: var(--teal);   border-color: rgba(79, 209, 197, 0.45); }
+  .chip-amber  { color: var(--amber);  border-color: rgba(246, 173, 85, 0.45); }
+  .chip-violet { color: var(--violet); border-color: rgba(183, 148, 244, 0.45); }
+  .chip-green  { color: var(--green);  border-color: rgba(104, 211, 145, 0.45); }
+  .units {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 1.15rem 0 1.35rem;
+    padding: 0;
+    list-style: none;
+  }
+  .units li {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    padding: 0.32rem 0.72rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(110, 168, 254, 0.07);
+    color: var(--text);
+  }
+  figure { margin: 1.75rem 0; }
+  .diagram {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .diagram svg { display: block; width: 100%; min-width: 540px; height: auto; }
+  figcaption {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    margin-top: 0.75rem;
+    padding: 0 0.15rem;
+  }
+  .tbl-wrap { overflow-x: auto; margin: 1.25rem 0 1.5rem; }
+  table {
+    width: 100%;
+    min-width: 22rem;
+    border-collapse: collapse;
+    font-size: 0.96rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.62rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  ol.steps { padding-left: 1.35rem; }
+  ol.steps > li { margin-bottom: 1.1rem; }
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 3.25rem 0 0;
+  }
+  footer { margin-top: 2.75rem; color: var(--muted); }
+  footer p { margin-bottom: 1.15rem; }
+  @media (max-width: 420px) {
+    body { font-size: 16px; }
+    .wrap { padding: 1.75rem 1.05rem 3.5rem; }
+    .card { padding: 1.15rem 1.05rem; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header>
+  <p class="kicker">Methodology</p>
+  <h1>Methodology &mdash; Universal Framework Approach</h1>
+  <p class="lede">Every metric you care about &mdash; monthly profit, process efficiency, a product-design score &mdash; is a single main equation assembled from small blocks. Blocks plug into one another, wires carry values between them, and one green Result block gives you the final number. This page explains how that works and walks you through building a real model from scratch.</p>
+  <p class="btn-row"><a class="btn" href="index.html">Open the tool</a></p>
+</header>
+
+<h2>The idea</h2>
+<p>A spreadsheet hides its reasoning inside formulas that are invisible until you click a cell. The Universal Framework Approach makes the reasoning the artefact: a metric is one equation, and the equation is built visually out of small blocks. A <strong>Value input</strong> holds a named number. An <strong>Operation</strong> or <strong>Formula</strong> combines values. Wires carry values from one block to the next. A <strong>Result</strong> block presents the final number.</p>
+<p>This beats a spreadsheet for four practical reasons:</p>
+<ul>
+  <li><strong>The shape of the reasoning is visible.</strong> You can see the structure of the model at a glance, hand it to a colleague, and argue about the structure rather than about cell references.</li>
+  <li><strong>Every intermediate value is exposed.</strong> Revenue, variable cost and total cost are real blocks with real numbers on them &mdash; not side calculations in columns F through K.</li>
+  <li><strong>Units are checked.</strong> The engine knows what kind of quantity each number is, so a total mistakenly used as a per-unit rate is caught instead of quietly producing nonsense.</li>
+  <li><strong>You can see which input actually drives the outcome.</strong> The sensitivity panel ranks your inputs by how much they move the result.</li>
+</ul>
+
+<h2>The four block types</h2>
+
+<div class="card">
+  <p class="chip chip-teal">Value input</p>
+  <h3>A named number with a unit</h3>
+  <p>A Value input is a named number with a unit and an optional <code>Min</code> / <code>Likely</code> / <code>Max</code> range. It is <em>named</em> because formulas refer to inputs by name, not by position.</p>
+  <p class="muted">Example: <code>price</code> &mdash; value 49, unit <code>$/unit</code>, min 39, likely 49, max 59.</p>
+</div>
+
+<div class="card">
+  <p class="chip chip-amber">Operation</p>
+  <h3>Two ports, one calculation</h3>
+  <p>An Operation performs exactly one of: <strong>Add, Subtract, Multiply, Divide, Power, Minimum, Maximum, Round, Percent of</strong>. It has two input ports, <code>a</code> and <code>b</code>, and the result is shown directly on the block.</p>
+  <p class="muted">Example: a <strong>Multiply</strong> block with <code>a</code> = price (49) and <code>b</code> = volume (1,200) shows <code>58,800</code>.</p>
+</div>
+
+<div class="card">
+  <p class="chip chip-violet">Formula</p>
+  <h3>A typed expression over named inputs</h3>
+  <p>A Formula holds one typed expression over named inputs, for example <code>price * volume * (1 - churn)</code>. The block's inputs are the named ports you add to it &mdash; anything the expression references must be one of those inputs.</p>
+  <p class="muted">Example: a Formula block with inputs <code>price</code>, <code>volume</code> and <code>churn</code> can use those three names and nothing else.</p>
+</div>
+
+<div class="card">
+  <p class="chip chip-green">Result</p>
+  <h3>The final outcome of the model</h3>
+  <p>The Result block is the outcome of the model, with an optional <code>Display unit</code> that presents it the way you want.</p>
+  <p class="muted">Example: Title <code>Monthly profit</code>, Display unit <code>$</code>, showing <code>$27,700</code>.</p>
+</div>
+
+<figure>
+  <div class="diagram">
+    <svg viewBox="0 0 720 340" role="img" aria-label="Diagram: two Value input blocks, price in dollars per unit and volume in units, are wired into a Multiply operation block, which is wired into a green Result block labelled monthly profit." xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="0" y="0" width="720" height="340" fill="#0a0f1e"></rect>
+      <g stroke="rgba(110,168,254,0.07)" stroke-width="1">
+        <path d="M0 60 H720 M0 140 H720 M0 220 H720 M0 300 H720"></path>
+        <path d="M120 0 V340 M240 0 V340 M360 0 V340 M480 0 V340 M600 0 V340"></path>
+      </g>
+
+      <path d="M 220 92 C 252 92 254 152 285 152" fill="none" stroke="#4fd1c5" stroke-width="2.5" stroke-linecap="round"></path>
+      <path d="M 220 254 C 252 254 254 196 285 196" fill="none" stroke="#4fd1c5" stroke-width="2.5" stroke-linecap="round"></path>
+      <path d="M 470 174 C 494 174 512 174 535 174" fill="none" stroke="#68d391" stroke-width="2.5" stroke-linecap="round"></path>
+
+      <g>
+        <rect x="30" y="48" width="190" height="88" rx="12" fill="#121a2e" stroke="rgba(79,209,197,0.5)" stroke-width="1.5"></rect>
+        <rect x="30" y="48" width="190" height="28" rx="12" fill="rgba(79,209,197,0.14)"></rect>
+        <rect x="30" y="64" width="190" height="12" fill="#121a2e"></rect>
+        <text x="44" y="68" fill="#4fd1c5" font-size="12" letter-spacing="1.5">VALUE INPUT</text>
+        <text x="44" y="102" fill="#e8ecf8" font-size="15">price ($/unit)</text>
+        <text x="44" y="124" fill="#8fa0c4" font-size="13">49  (39 - 59)</text>
+      </g>
+
+      <g>
+        <rect x="30" y="210" width="190" height="88" rx="12" fill="#121a2e" stroke="rgba(79,209,197,0.5)" stroke-width="1.5"></rect>
+        <rect x="30" y="210" width="190" height="28" rx="12" fill="rgba(79,209,197,0.14)"></rect>
+        <rect x="30" y="226" width="190" height="12" fill="#121a2e"></rect>
+        <text x="44" y="230" fill="#4fd1c5" font-size="12" letter-spacing="1.5">VALUE INPUT</text>
+        <text x="44" y="264" fill="#e8ecf8" font-size="15">volume (units)</text>
+        <text x="44" y="286" fill="#8fa0c4" font-size="13">1,200  (800 - 1,600)</text>
+      </g>
+
+      <g>
+        <rect x="285" y="128" width="185" height="92" rx="12" fill="#121a2e" stroke="rgba(246,173,85,0.5)" stroke-width="1.5"></rect>
+        <rect x="285" y="128" width="185" height="28" rx="12" fill="rgba(246,173,85,0.14)"></rect>
+        <rect x="285" y="144" width="185" height="12" fill="#121a2e"></rect>
+        <text x="299" y="148" fill="#f6ad55" font-size="12" letter-spacing="1.5">OPERATION</text>
+        <text x="299" y="182" fill="#e8ecf8" font-size="15">Multiply  a x b</text>
+        <text x="299" y="206" fill="#f6ad55" font-size="14">58,800</text>
+      </g>
+
+      <g>
+        <rect x="535" y="128" width="155" height="92" rx="12" fill="#121a2e" stroke="rgba(104,211,145,0.55)" stroke-width="1.5"></rect>
+        <rect x="535" y="128" width="155" height="28" rx="12" fill="rgba(104,211,145,0.14)"></rect>
+        <rect x="535" y="144" width="155" height="12" fill="#121a2e"></rect>
+        <text x="549" y="148" fill="#68d391" font-size="12" letter-spacing="1.5">RESULT</text>
+        <text x="549" y="182" fill="#e8ecf8" font-size="15">monthly profit</text>
+        <text x="549" y="206" fill="#68d391" font-size="14">$27,700</text>
+      </g>
+
+      <g fill="#0a0f1e" stroke-width="2">
+        <circle cx="220" cy="92" r="6" stroke="#4fd1c5"></circle>
+        <circle cx="220" cy="254" r="6" stroke="#4fd1c5"></circle>
+        <circle cx="285" cy="152" r="6" stroke="#4fd1c5"></circle>
+        <circle cx="285" cy="196" r="6" stroke="#4fd1c5"></circle>
+        <circle cx="470" cy="174" r="6" stroke="#f6ad55"></circle>
+        <circle cx="535" cy="174" r="6" stroke="#68d391"></circle>
+      </g>
+      <text x="264" y="140" fill="#8fa0c4" font-size="13">a</text>
+      <text x="264" y="216" fill="#8fa0c4" font-size="13">b</text>
+      <text x="500" y="164" fill="#8fa0c4" font-size="13">in</text>
+    </svg>
+  </div>
+  <figcaption>Two Value inputs feed a Multiply operation; its result feeds the Result block. Round dots are ports: the dot on the right of a block is its output, the dots on the left are inputs. Curved lines are wires, and each wire carries the value shown on the block it leaves.</figcaption>
+</figure>
+
+<h2>How values flow</h2>
+<p>Wires connect an output port to an input port. The model is a directed acyclic graph: values travel one way, from inputs to the result. There is no back-flow and no hidden state.</p>
+<ul>
+  <li><strong>Loops are refused.</strong> If wiring a connection would create a cycle, the tool rejects it. A model is a computation, not a feedback simulation.</li>
+  <li><strong>Each block shows its current value.</strong> Change an input and every downstream block updates immediately.</li>
+  <li><strong>Each wire shows what it carries.</strong> You can follow a number from the input that produced it, through every intermediate step, to the result.</li>
+</ul>
+
+<h2>Units and dimensional checking</h2>
+<p>The engine tracks what kind of quantity every number is, and it checks every combination before it computes:</p>
+<ul>
+  <li><strong>Adding and subtracting requires the same kind of quantity</strong> &mdash; money to money, time to time.</li>
+  <li><strong>Multiplying and dividing combines units:</strong> <code>$/unit</code> x <code>units</code> becomes <code>$</code>; <code>units</code> / <code>hrs</code> stays <code>units/hrs</code>.</li>
+  <li><strong>Percentages and plain ratios scale without changing the unit:</strong> <code>$5</code> x <code>20%</code> is <code>$1</code>.</li>
+  <li><strong>Compatible units convert automatically:</strong> <code>30 min</code> + <code>1 hr</code> is <code>90 min</code>. The result shows in the first input's unit, and a Result block can be given a display unit such as <code>hrs</code> to show <code>1.5 hrs</code>.</li>
+  <li><strong>Incompatible combinations are refused</strong> with a plain-language error &mdash; money and time cannot be added.</li>
+</ul>
+<p>The tool knows these units:</p>
+<ul class="units">
+  <li>$</li><li>k$</li><li>M$</li><li>%</li><li>x</li><li>num</li><li>units</li><li>users</li><li>customers</li><li>hrs</li><li>min</li><li>days</li><li>$/unit</li><li>units/hrs</li><li>$/hrs</li>
+</ul>
+<p>Any other word you type becomes its own unit. If your domain counts <code>widgets</code> or <code>tickets</code>, type that word and it works the same way &mdash; domain-specific models need no configuration.</p>
+
+<h2>Reading the result</h2>
+<p>Values are live everywhere: edit one input and every block and wire updates at once, so you always know the model's current answer and where it came from.</p>
+<p>The <strong>sensitivity panel</strong> ranks inputs by how much they move the result:</p>
+<ul>
+  <li>When an input has a <code>Min</code> and a <code>Max</code>, the engine measures the full min-to-max swing on the result.</li>
+  <li>Otherwise it measures the effect of a <code>+1%</code> change in that input.</li>
+</ul>
+<p>Act on the ranking, not on your intuition. Tighten the estimate of the top driver first &mdash; if the swing from your biggest uncertainty dominates the ranking, more precision there changes the decision, and precision anywhere else does not. If the top driver is a cost you control, negotiate it. If it is a volume assumption, test it. If two inputs fight for the top spot, the decision is genuinely sensitive to both, and you should plan for both.</p>
+
+<h2>Walkthrough: build a monthly profit model from scratch</h2>
+<p>This builds a complete model using the tool's real interface. On a desktop the <strong>Blocks palette</strong> is the left panel, listing <code>Value input</code>, <code>Operation</code>, <code>Formula</code> and <code>Result</code>. On a phone the palette opens from the <code>+ Blocks</code> button, and the settings panel is called <strong>Block settings</strong>.</p>
+
+<ol class="steps">
+  <li><strong>Start clean.</strong> Press <code>New</code> in the toolbar. The toolbar also offers <code>Import</code>, <code>Export JSON</code>, <code>Export SVG</code>, <code>Export PNG</code>, <code>Docs</code> and <code>Fit</code>.</li>
+  <li><strong>Add the four Value inputs.</strong> Drag <code>Value input</code> from the Blocks palette onto the canvas four times. Select each one and fill in <strong>Block settings</strong> with the fields <code>Name</code>, <code>Value</code>, <code>Unit</code>, <code>Min</code>, <code>Likely</code>, <code>Max</code>:
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Value</th><th>Unit</th><th>Min</th><th>Likely</th><th>Max</th></tr></thead>
+        <tbody>
+          <tr><td><code>price</code></td><td class="num">49</td><td class="num">$/unit</td><td class="num">39</td><td class="num">49</td><td class="num">59</td></tr>
+          <tr><td><code>volume</code></td><td class="num">1200</td><td class="num">units</td><td class="num">800</td><td class="num">1200</td><td class="num">1600</td></tr>
+          <tr><td><code>cost per unit</code></td><td class="num">18</td><td class="num">$/unit</td><td class="num">&mdash;</td><td class="num">18</td><td class="num">&mdash;</td></tr>
+          <tr><td><code>fixed costs</code></td><td class="num">9500</td><td class="num">$</td><td class="num">&mdash;</td><td class="num">9500</td><td class="num">&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </li>
+  <li><strong>Wire revenue.</strong> Drag from the output port (the round dot on the right of the <code>price</code> block) to an input port (a round dot on the left) of a new <code>Operation</code> block; then wire <code>volume</code> into the second input port. In Block settings set <code>Title</code> to <code>revenue</code> and <code>Operation</code> to <code>Multiply</code>. The block shows <code>58,800</code>.</li>
+  <li><strong>Wire variable cost.</strong> Add another <code>Operation</code>: <code>cost per unit</code> x <code>volume</code>, <code>Operation</code> = <code>Multiply</code>, <code>Title</code> = <code>variable cost</code>. It shows <code>21,600</code>.</li>
+  <li><strong>Wire total cost.</strong> Add an <code>Operation</code> with <code>Title</code> <code>total cost</code>, <code>Operation</code> = <code>Add</code>, wired from <code>variable cost</code> and <code>fixed costs</code>. It shows <code>31,100</code>.</li>
+  <li><strong>Wire profit into the Result.</strong> Add an <code>Operation</code> with <code>Title</code> <code>profit</code>, <code>Operation</code> = <code>Subtract</code>, with <code>revenue</code> as <code>a</code> and <code>total cost</code> as <code>b</code>. It shows <code>27,700</code>. Then add a <code>Result</code> block and wire <code>profit</code> into it. In Block settings the Result has <code>Title</code> and <code>Display unit</code>: set Title to <code>Monthly profit</code> and Display unit to <code>$</code>. The result reads <code>$27,700</code>.</li>
+  <li><strong>Check the numbers.</strong> Every block should now agree:
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Block</th><th>Calculation</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>revenue</td><td class="num">49 x 1,200</td><td class="num">58,800</td></tr>
+          <tr><td>variable cost</td><td class="num">18 x 1,200</td><td class="num">21,600</td></tr>
+          <tr><td>total cost</td><td class="num">21,600 + 9,500</td><td class="num">31,100</td></tr>
+          <tr><td>profit</td><td class="num">58,800 - 31,100</td><td class="num">27,700</td></tr>
+          <tr><td>Monthly profit</td><td class="num">Result, display unit $</td><td class="num">$27,700</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </li>
+  <li><strong>Optional: do it in one Formula instead.</strong> A single <code>Formula</code> block can replace the four Operation blocks. Add the block, then use <code>Add input</code> in Block settings to create four named inputs on the <code>Inputs</code> list &mdash; <code>price</code>, <code>volume</code>, <code>cost</code>, <code>fixed</code> &mdash; wire the Value inputs to them, and type the <code>Expression</code> <code>price * volume - (cost * volume + fixed)</code>. Wire the Formula straight into the Result. Same answer (<code>$27,700</code>), fewer blocks; the trade-off is that intermediate totals like total cost are no longer visible as their own blocks.</li>
+  <li><strong>Read the sensitivity panel.</strong> Because <code>price</code> and <code>volume</code> have a Min and a Max, the engine measures their full min-to-max swing on the result; the inputs without a range are measured at <code>+1%</code>. Expect <code>price</code> and <code>volume</code> at the top &mdash; a swing of 39 to 59 on price alone moves profit by roughly 24,000. If you can only improve one estimate this week, improve the price estimate.</li>
+  <li><strong>Presentation and export.</strong> Set a <code>Display unit</code> on the Result to present the number as you want it. Then use <code>Export SVG</code> for a crisp diagram for a deck or a document, <code>Export PNG</code> for a quick share, and <code>Export JSON</code> to carry the model itself to another device.</li>
+</ol>
+
+<h2>Tips and troubleshooting</h2>
+<ul>
+  <li><strong>Unconnected ports show an error naming the port.</strong> The message points at exactly which input is still empty &mdash; wire it and the error clears.</li>
+  <li><strong>Loops are refused.</strong> If a wire is rejected, the connection would make values flow in a circle. A model is one-way, from inputs to result.</li>
+  <li><strong>Unit mismatch errors usually mean a labelling mistake.</strong> Most often a total was labelled as a per-unit rate (or the reverse) &mdash; for example <code>total cost</code> tagged as <code>$/unit</code>. Fix the unit on the offending block.</li>
+  <li><strong>Formulas resolve names from their own Inputs list.</strong> If an expression cannot find a name, that name is missing from the block's <code>Inputs</code>; add it with <code>Add input</code> and wire a value into it.</li>
+  <li><strong>The model autosaves in your browser</strong> (localStorage), so closing the tab does not lose your work. <code>Export JSON</code> and <code>Import JSON</code> move a model between devices.</li>
+  <li><strong>Choose the export for the job.</strong> <code>Export SVG</code> stays crisp when zoomed &mdash; use it for print and slides &mdash; while <code>Export PNG</code> is a 3x raster for places that only accept images.</li>
+</ul>
+
+<hr class="divider">
+
+<footer>
+  <p>That is the whole method: assemble one equation from small blocks, wire them together, check the units, and let the sensitivity panel tell you which input deserves your attention. Start with the model you actually need to decide on today.</p>
+  <p class="btn-row"><a class="btn" href="index.html">Open the tool</a></p>
+</footer>
+
+</main>
+</body>
+</html>

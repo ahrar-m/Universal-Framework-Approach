@@ -2,66 +2,104 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Universal Framework Approach</title>
-  <meta name="description" content="Universal Framework Approach">
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #0b1020;
-      --card: #151b30;
-      --text: #e8ecf8;
-      --muted: #9aa4c4;
-      --accent: #6ea8fe;
-    }
-    @media (prefers-color-scheme: light) {
-      :root { --bg: #f6f8fc; --card: #ffffff; --text: #131a2b; --muted: #5a6480; --accent: #1f5fd6; }
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 2rem 1rem;
-      background: var(--bg);
-      color: var(--text);
-      font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    }
-    main { width: min(46rem, 100%); }
-    h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.15; margin: 0 0 .75rem; }
-    p.lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 2rem; }
-    .card {
-      display: block;
-      background: var(--card);
-      border: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
-      border-radius: 14px;
-      padding: 1.1rem 1.25rem;
-      margin-bottom: .75rem;
-      text-decoration: none;
-      color: inherit;
-    }
-    .card strong { display: block; margin-bottom: .15rem; }
-    .card span { color: var(--muted); font-size: .92rem; }
-    a.plain { color: var(--accent); }
-    footer { margin-top: 2rem; color: var(--muted); font-size: .85rem; }
-    code { background: color-mix(in srgb, var(--muted) 18%, transparent); padding: .1rem .35rem; border-radius: 6px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Universal Framework Approach — block-based modelling</title>
+  <meta name="description" content="Build any metric — profit, efficiency, a design score — from small blocks that plug into one main equation, with live values, dimensional unit checking and sensitivity analysis.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0f1e'/%3E%3Cpath d='M8 22 L8 14 L14 14 M8 10 L20 10 L20 14' stroke='%236ea8fe' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='24' cy='18' r='3.5' fill='%2368d391'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <main>
-    <h1>Universal Framework Approach</h1>
-    <p class="lead">A structured approach to framing, documenting and applying reusable frameworks.</p>
-    <a class="card" href="https://github.com/ahrar-m/Universal-Framework-Approach">
-      <strong>Repository on GitHub</strong>
-      <span>Source, history and issues</span>
-    </a>
-    <a class="card" href="https://github.com/ahrar-m/Universal-Framework-Approach/blob/main/README.md">
-      <strong>README</strong>
-      <span>Project overview and how to contribute</span>
-    </a>
-    <p>Replace this page by editing <code>docs/index.html</code>. Every push to <code>main</code> redeploys the site.</p>
-    <footer>Published with GitHub Pages.</footer>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Universal Framework Approach</span>
+    </div>
+    <input id="modelName" class="model-name" type="text" value="Untitled model" aria-label="Model name" spellcheck="false">
+    <nav class="actions" aria-label="Model actions">
+      <button type="button" id="btnNew" class="btn">New</button>
+      <button type="button" id="btnImport" class="btn">Import</button>
+      <button type="button" id="btnExportJson" class="btn">Export JSON</button>
+      <button type="button" id="btnExportSvg" class="btn">Export SVG</button>
+      <button type="button" id="btnExportPng" class="btn">Export PNG</button>
+      <a class="btn btn-link" href="methodology.html">Docs</a>
+      <button type="button" id="btnFit" class="btn btn-icon" title="Fit the model in view">Fit</button>
+    </nav>
+    <div class="save-state" id="saveState" title="Autosaved in this browser">saved</div>
+  </header>
+
+  <main class="layout">
+    <aside class="palette" id="palette" aria-label="Blocks palette">
+      <h2 class="panel-title">Blocks</h2>
+      <p class="panel-sub">Tap to add a block to the canvas.</p>
+      <div class="palette-list">
+        <button type="button" class="palette-item" data-type="input">
+          <span class="swatch swatch-input"></span>
+          <span class="palette-text"><strong>Value input</strong><em>A named number with a unit and optional range</em></span>
+        </button>
+        <button type="button" class="palette-item" data-type="op">
+          <span class="swatch swatch-op"></span>
+          <span class="palette-text"><strong>Operation</strong><em>Add, subtract, multiply, divide, compare</em></span>
+        </button>
+        <button type="button" class="palette-item" data-type="formula">
+          <span class="swatch swatch-formula"></span>
+          <span class="palette-text"><strong>Formula</strong><em>A typed expression over named inputs</em></span>
+        </button>
+        <button type="button" class="palette-item" data-type="result">
+          <span class="swatch swatch-result"></span>
+          <span class="palette-text"><strong>Result</strong><em>The final outcome of the model</em></span>
+        </button>
+      </div>
+      <div class="palette-help">
+        <strong>Wiring</strong>
+        Drag from the round port on the right of a block to a port on the left of the next one.
+        On touch: tap the output port, then tap the input port.
+      </div>
+    </aside>
+
+    <section class="stage" id="stage">
+      <svg id="canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Model canvas"></svg>
+      <div class="stage-hint" id="stageHint">
+        <strong>Start here</strong>
+        Add a <em>Value input</em> from the Blocks palette, then wire it into a <em>Result</em>.
+      </div>
+      <div class="zoom-controls" aria-hidden="false">
+        <button type="button" id="btnZoomOut" class="btn btn-icon" title="Zoom out">−</button>
+        <button type="button" id="btnZoomReset" class="btn btn-icon" title="Reset zoom">1:1</button>
+        <button type="button" id="btnZoomIn" class="btn btn-icon" title="Zoom in">+</button>
+      </div>
+    </section>
+
+    <aside class="side" id="side">
+      <section class="panel" id="settingsPanel">
+        <h2 class="panel-title">Block settings</h2>
+        <div id="settingsBody" class="panel-body">
+          <p class="panel-sub">Select a block on the canvas to edit it.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="sensitivityPanel">
+        <h2 class="panel-title">What moves the result</h2>
+        <div id="sensitivityBody" class="panel-body">
+          <p class="panel-sub">Add inputs to see which one drives the outcome.</p>
+        </div>
+      </section>
+
+      <section class="panel panel-issues" id="issuesPanel">
+        <h2 class="panel-title">Model check</h2>
+        <div id="issuesBody" class="panel-body"></div>
+      </section>
+    </aside>
   </main>
+
+  <div class="sheet-scrim" id="sheetScrim" hidden></div>
+  <div class="fab-row">
+    <button type="button" class="fab" id="btnPalette">+ Blocks</button>
+    <button type="button" class="fab fab-alt" id="btnSettings">Settings</button>
+  </div>
+
+  <input type="file" id="fileInput" accept="application/json,.json" hidden>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

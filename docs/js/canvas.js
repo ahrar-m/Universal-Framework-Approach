@@ -1,0 +1,475 @@
+// canvas.js — SVG node-graph rendering and pointer interaction (mouse + touch).
+import { blockPorts, blockTitle, blockHasOutput, OPS } from './engine.js';
+import { formatValue } from './units.js';
+
+export const TYPE_META = {
+  input: { color: '#4fd1c5', label: 'VALUE INPUT' },
+  op: { color: '#f6ad55', label: 'OPERATION' },
+  formula: { color: '#b794f4', label: 'FORMULA' },
+  result: { color: '#68d391', label: 'RESULT' }
+};
+
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const SANS = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
+function esc(text) {
+  return String(text === undefined || text === null ? '' : text)
+    .split('&').join('&amp;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+    .split('"').join('&quot;');
+}
+
+function trunc(text, n) {
+  const s = String(text === undefined ? '' : text);
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+export function blockGeometry(block) {
+  const ports = blockPorts(block);
+  const w = 212;
+  const headerH = 42;
+  const rowH = 27;
+  const footerH = block.type === 'result' ? 58 : block.type === 'formula' ? 52 : 42;
+  const rows = Math.max(1, ports.length);
+  const h = headerH + rows * rowH + footerH;
+  return { w: w, h: h, headerH: headerH, rowH: rowH, footerH: footerH, rows: rows, ports: ports };
+}
+
+export function portPoint(block, portId) {
+  const g = blockGeometry(block);
+  const idx = g.ports.findIndex(function (p) { return p.id === portId; });
+  if (idx < 0) return { x: block.x + g.w / 2, y: block.y + g.h / 2, dir: 'in' };
+  return {
+    x: block.x,
+    y: block.y + g.headerH + idx * g.rowH + g.rowH / 2,
+    dir: 'in'
+  };
+}
+
+export function outPoint(block) {
+  const g = blockGeometry(block);
+  return { x: block.x + g.w, y: block.y + g.h / 2, dir: 'out' };
+}
+
+export function blockRect(block) {
+  const g = blockGeometry(block);
+  return { x: block.x, y: block.y, w: g.w, h: g.h };
+}
+
+function wirePath(a, b) {
+  const dx = Math.max(48, Math.min(180, Math.abs(b.x - a.x) * 0.55 + Math.abs(b.y - a.y) * 0.12));
+  return 'M ' + a.x + ' ' + a.y + ' C ' + (a.x + dx) + ' ' + a.y + ', ' + (b.x - dx) + ' ' + b.y + ', ' + b.x + ' ' + b.y;
+}
+
+export function createCanvas(opts) {
+  const svg = opts.svg;
+  const view = { x: 0, y: 0, k: 1 };
+  const pointers = new Map();
+  let gesture = null;
+  let pinch = null;
+  let pending = null;      // { blockId, portId, dir } awaiting a second tap
+  let tempWire = null;     // { from, to: {x, y} }
+  let selection = null;    // { kind: 'block' | 'wire', id }
+
+  function model() { return opts.getModel(); }
+  function values() { return opts.getValues() || {}; }
+
+  function svgSize() {
+    const r = svg.getBoundingClientRect();
+    return { w: r.width || 800, h: r.height || 600 };
+  }
+
+  function clientToCanvas(cx, cy) {
+    const r = svg.getBoundingClientRect();
+    return {
+      x: (cx - r.left - view.x) / view.k,
+      y: (cy - r.top - view.y) / view.k
+    };
+  }
+
+  // ---------------------------------------------------------------- rendering
+  let renderQueued = false;
+  function scheduleRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    const run = function () { renderQueued = false; render(); };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  }
+
+  function render() {
+    const m = model();
+    const vals = values();
+    const parts = [];
+    parts.push('<rect x="-20000" y="-20000" width="40000" height="40000" fill="url(#grid)" />');
+    parts.push('<g id="viewport" transform="translate(' + view.x + ' ' + view.y + ') scale(' + view.k + ')">');
+
+    // wires first
+    for (const w of m.wires) {
+      const from = m.blocks.find(function (b) { return b.id === w.from; });
+      const to = m.blocks.find(function (b) { return b.id === w.to; });
+      if (!from || !to) continue;
+      const a = outPoint(from);
+      const b = portPoint(to, w.toPort);
+      const meta = TYPE_META[from.type] || TYPE_META.input;
+      const d = wirePath(a, b);
+      const selected = selection && selection.kind === 'wire' && selection.id === w.id;
+      const upValue = vals[from.id];
+      const label = upValue && !upValue.error ? upValue.display : '';
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 10 };
+      parts.push('<path d="' + d + '" fill="none" stroke="' + meta.color + '" stroke-opacity="0.16" stroke-width="8" stroke-linecap="round" />');
+      parts.push('<path d="' + d + '" fill="none" stroke="' + meta.color + '" stroke-opacity="' + (selected ? 1 : 0.85) + '" stroke-width="' + (selected ? 3.4 : 2.2) + '" stroke-linecap="round" />');
+      parts.push('<path d="' + d + '" fill="none" stroke="transparent" stroke-width="16" data-wire="' + esc(w.id) + '" style="cursor:pointer" />');
+      if (label) {
+        const tw = label.length * 6.6 + 12;
+        parts.push('<g pointer-events="none"><rect x="' + (mid.x - tw / 2) + '" y="' + (mid.y - 11) + '" width="' + tw + '" height="18" rx="9" fill="#0b1226" stroke="rgba(110,168,254,0.28)" />');
+        parts.push('<text x="' + mid.x + '" y="' + (mid.y + 2) + '" text-anchor="middle" font-family="' + MONO + '" font-size="10.5" fill="#cfe0ff">' + esc(label) + '</text></g>');
+      }
+    }
+
+    // blocks
+    for (const block of m.blocks) {
+      parts.push(renderBlock(block, vals[block.id]));
+    }
+
+    // temp wire
+    if (tempWire) {
+      const from = m.blocks.find(function (b) { return b.id === tempWire.from.blockId; });
+      if (from) {
+        const a = tempWire.from.dir === 'out' ? outPoint(from) : portPoint(from, tempWire.from.portId);
+        const d = wirePath(a, tempWire.to);
+        parts.push('<path d="' + d + '" fill="none" stroke="#6ea8fe" stroke-width="2.4" stroke-dasharray="7 6" stroke-linecap="round" />');
+        parts.push('<circle cx="' + tempWire.to.x + '" cy="' + tempWire.to.y + '" r="7" fill="none" stroke="#6ea8fe" stroke-width="2" />');
+      }
+    }
+
+    parts.push('</g>');
+    svg.innerHTML = defs() + parts.join('');
+  }
+
+  function defs() {
+    return '<defs>' +
+      '<pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse">' +
+      '<rect width="26" height="26" fill="none" />' +
+      '<path d="M 26 0 L 0 0 0 26" fill="none" stroke="rgba(110,168,254,0.07)" stroke-width="1" />' +
+      '</pattern>' +
+      '<linearGradient id="resultGrad" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0%" stop-color="#12263a" /><stop offset="100%" stop-color="#123028" />' +
+      '</linearGradient>' +
+      '</defs>';
+  }
+
+  function renderBlock(block, val) {
+    const meta = TYPE_META[block.type] || TYPE_META.input;
+    const g = blockGeometry(block);
+    const selected = selection && selection.kind === 'block' && selection.id === block.id;
+    const hasError = val && val.error;
+    const stroke = hasError ? '#fc8181' : meta.color;
+    const out = [];
+    out.push('<g data-block="' + esc(block.id) + '" transform="translate(' + block.x + ' ' + block.y + ')" style="cursor:grab">');
+
+    // card
+    const fill = block.type === 'result' ? 'url(#resultGrad)' : '#111c33';
+    out.push('<rect x="0" y="0" width="' + g.w + '" height="' + g.h + '" rx="14" fill="' + fill + '" stroke="' + stroke + '" stroke-opacity="' + (selected ? 0.95 : 0.42) + '" stroke-width="' + (selected ? 2.4 : 1.4) + '" />');
+    if (selected) {
+      out.push('<rect x="-5" y="-5" width="' + (g.w + 10) + '" height="' + (g.h + 10) + '" rx="18" fill="none" stroke="' + stroke + '" stroke-opacity="0.28" stroke-width="1.4" />');
+    }
+    // header accent bar
+    out.push('<rect x="1" y="1" width="' + (g.w - 2) + '" height="4" rx="2" fill="' + meta.color + '" opacity="0.75" />');
+
+    // header text
+    out.push('<text x="14" y="22" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.6" fill="' + meta.color + '" opacity="0.95">' + meta.label + '</text>');
+    const title = blockTitle(block);
+    out.push('<text x="14" y="' + (block.type === 'input' ? 38 : 38) + '" font-family="' + SANS + '" font-size="14.5" font-weight="600" fill="#eef3ff">' + esc(trunc(title, 24)) + '</text>');
+
+    // port rows
+    for (let i = 0; i < g.ports.length; i++) {
+      const p = g.ports[i];
+      const py = g.headerH + i * g.rowH + g.rowH / 2;
+      out.push('<text x="18" y="' + (py + 4) + '" font-family="' + MONO + '" font-size="11.5" fill="#9db1d8">' + esc(trunc(p.label, 16)) + '</text>');
+      out.push('<circle cx="0" cy="' + py + '" r="13" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="' + esc(p.id) + '" data-dir="in" style="cursor:crosshair" />');
+      out.push('<circle cx="0" cy="' + py + '" r="5.5" fill="#0b1226" stroke="' + meta.color + '" stroke-width="2" pointer-events="none" />');
+      out.push('<circle cx="0" cy="' + py + '" r="2" fill="' + meta.color + '" pointer-events="none" />');
+    }
+
+    // output port
+    if (blockHasOutput(block)) {
+      const oy = g.h / 2;
+      out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="13" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="out" data-dir="out" style="cursor:crosshair" />');
+      out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="5.5" fill="#0b1226" stroke="' + meta.color + '" stroke-width="2" pointer-events="none" />');
+      out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="2" fill="' + meta.color + '" pointer-events="none" />');
+    }
+
+    // footer value
+    const fy = g.headerH + g.rows * g.rowH;
+    out.push('<line x1="10" y1="' + fy + '" x2="' + (g.w - 10) + '" y2="' + fy + '" stroke="rgba(110,168,254,0.16)" />');
+    const display = val ? (val.error ? 'error' : val.display) : '—';
+    const valueColor = hasError ? '#fc8181' : '#eaf1ff';
+    if (block.type === 'result') {
+      out.push('<text x="14" y="' + (fy + 15) + '" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.4" fill="#8fa0c4">FINAL RESULT</text>');
+      out.push('<text x="14" y="' + (fy + 42) + '" font-family="' + MONO + '" font-size="21" font-weight="700" fill="#68d391">' + esc(trunc(display, 20)) + '</text>');
+    } else if (block.type === 'formula') {
+      out.push('<text x="14" y="' + (fy + 18) + '" font-family="' + MONO + '" font-size="10.5" fill="#8fa0c4">' + esc(trunc(block.expr || 'empty expression', 28)) + '</text>');
+      out.push('<text x="14" y="' + (fy + 38) + '" font-family="' + MONO + '" font-size="15" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 18)) + '</text>');
+    } else if (block.type === 'op') {
+      const op = OPS[block.op] || OPS.add;
+      out.push('<text x="14" y="' + (fy + 27) + '" font-family="' + MONO + '" font-size="17" fill="' + meta.color + '">' + esc(op.symbol) + '</text>');
+      out.push('<text x="46" y="' + (fy + 27) + '" font-family="' + MONO + '" font-size="15" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 16)) + '</text>');
+    } else {
+      const unit = val && val.unit ? (val.unit.l || '') : (block.unit || '');
+      out.push('<text x="14" y="' + (fy + 27) + '" font-family="' + MONO + '" font-size="16" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 16)) + '</text>');
+      if (unit) {
+        out.push('<rect x="' + (g.w - 16 - unit.length * 7.2) + '" y="' + (fy + 13) + '" width="' + (unit.length * 7.2 + 12) + '" height="20" rx="10" fill="rgba(79,209,197,0.14)" stroke="rgba(79,209,197,0.35)" />');
+        out.push('<text x="' + (g.w - 10 - unit.length * 7.2) + '" y="' + (fy + 27) + '" font-family="' + MONO + '" font-size="11" fill="#7fe6da">' + esc(unit) + '</text>');
+      }
+    }
+
+    if (hasError) {
+      out.push('<g><circle cx="' + (g.w - 14) + '" cy="16" r="9" fill="#fc8181" />');
+      out.push('<text x="' + (g.w - 14) + '" y="20" text-anchor="middle" font-family="' + SANS + '" font-size="12" font-weight="700" fill="#2a0b0b">!</text></g>');
+      out.push('<title>' + esc(val.error) + '</title>');
+    }
+    out.push('</g>');
+    return out.join('');
+  }
+
+  // ------------------------------------------------------------- interaction
+  function hitTarget(e) {
+    // With pointer capture, e.target is the svg root; hit-test the real element.
+    let el = null;
+    try {
+      if (document.elementFromPoint && e.clientX !== undefined) {
+        el = document.elementFromPoint(e.clientX, e.clientY);
+      }
+    } catch (err) {
+      el = null;
+    }
+    if (!el || el === svg || !el.closest) el = e.target;
+    if (el && el.closest) {
+      const port = el.closest('[data-port]');
+      if (port) return { kind: 'port', blockId: port.getAttribute('data-block'), portId: port.getAttribute('data-portid'), dir: port.getAttribute('data-dir') };
+      const wire = el.closest('[data-wire]');
+      if (wire) return { kind: 'wire', id: wire.getAttribute('data-wire') };
+      const block = el.closest('[data-block]');
+      if (block) return { kind: 'block', id: block.getAttribute('data-block') };
+    }
+    return { kind: 'empty' };
+  }
+
+  function onDown(e) {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    svg.setPointerCapture && svg.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, t: Date.now() });
+    if (pointers.size === 2) {
+      const pts = Array.from(pointers.values());
+      pinch = {
+        dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        cx: (pts[0].x + pts[1].x) / 2,
+        cy: (pts[0].y + pts[1].y) / 2
+      };
+      gesture = { kind: 'pinch' };
+      tempWire = null;
+      return;
+    }
+    const hit = hitTarget(e);
+    const pt = clientToCanvas(e.clientX, e.clientY);
+    if (hit.kind === 'port') {
+      if (pending && pending.blockId !== hit.blockId) {
+        opts.connect(pending.blockId, pending.portId, pending.dir, hit.blockId, hit.portId, hit.dir);
+        pending = null;
+        tempWire = null;
+        gesture = null;
+        render();
+        return;
+      }
+      pending = { blockId: hit.blockId, portId: hit.portId, dir: hit.dir };
+      tempWire = { from: pending, to: pt };
+      gesture = { kind: 'wire' };
+      render();
+      return;
+    }
+    if (hit.kind === 'block') {
+      const block = model().blocks.find(function (b) { return b.id === hit.id; });
+      if (!block) return;
+      selection = { kind: 'block', id: hit.id };
+      gesture = { kind: 'block', id: hit.id, dx: pt.x - block.x, dy: pt.y - block.y, moved: false };
+      opts.onSelect(hit.id);
+      render();
+      return;
+    }
+    if (hit.kind === 'wire') {
+      selection = { kind: 'wire', id: hit.id };
+      opts.onSelect(null);
+      render();
+      return;
+    }
+    // empty canvas: pan, and clear selection on tap
+    gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
+    pending = null;
+    tempWire = null;
+  }
+
+  function onMove(e) {
+    const p = pointers.get(e.pointerId);
+    if (p) { p.x = e.clientX; p.y = e.clientY; }
+    if (gesture && gesture.kind === 'pinch' && pointers.size >= 2) {
+      const pts = Array.from(pointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const cx = (pts[0].x + pts[1].x) / 2;
+      const cy = (pts[0].y + pts[1].y) / 2;
+      const rect = svg.getBoundingClientRect();
+      if (pinch && pinch.dist > 0) {
+        const factor = dist / pinch.dist;
+        zoomAt(cx - rect.left, cy - rect.top, factor);
+      }
+      view.x += cx - (pinch ? pinch.cx : cx);
+      view.y += cy - (pinch ? pinch.cy : cy);
+      pinch = { dist: dist, cx: cx, cy: cy };
+      render();
+      return;
+    }
+    if (!gesture) return;
+    if (gesture.kind === 'block') {
+      const pt = clientToCanvas(e.clientX, e.clientY);
+      const block = model().blocks.find(function (b) { return b.id === gesture.id; });
+      if (!block) return;
+      block.x = Math.round(pt.x - gesture.dx);
+      block.y = Math.round(pt.y - gesture.dy);
+      gesture.moved = true;
+      scheduleRender();
+      opts.onDrag();
+    } else if (gesture.kind === 'wire') {
+      tempWire.to = clientToCanvas(e.clientX, e.clientY);
+      scheduleRender();
+    } else if (gesture.kind === 'pan') {
+      const dx = e.clientX - gesture.sx;
+      const dy = e.clientY - gesture.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 6) gesture.moved = true;
+      view.x = gesture.vx + dx;
+      view.y = gesture.vy + dy;
+      scheduleRender();
+    }
+  }
+
+  function onUp(e) {
+    const p = pointers.get(e.pointerId);
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (!gesture) return;
+    const isTap = p ? (Math.abs(e.clientX - p.startX) + Math.abs(e.clientY - p.startY) < 9 && Date.now() - p.t < 700) : false;
+    const kind = gesture.kind;
+    if (kind === 'wire') {
+      const hit = hitTarget(e);
+      if (pending && hit.kind === 'port' && hit.blockId !== pending.blockId) {
+        opts.connect(pending.blockId, pending.portId, pending.dir, hit.blockId, hit.portId, hit.dir);
+        pending = null;
+      } else if (isTap) {
+        // keep pending so the next tap can complete the connection
+        tempWire = null;
+      } else {
+        pending = null;
+        tempWire = null;
+      }
+    } else if (kind === 'pan' && isTap) {
+      selection = null;
+      opts.onSelect(null);
+    } else if (kind === 'block' && isTap) {
+      opts.onSelect(gesture.id);
+    }
+    gesture = null;
+    render();
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const factor = Math.exp(-e.deltaY * 0.0016);
+    zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
+    render();
+    opts.onView();
+  }
+
+  function zoomAt(sx, sy, factor) {
+    const k2 = Math.max(0.2, Math.min(3.2, view.k * factor));
+    const real = k2 / view.k;
+    view.x = sx - (sx - view.x) * real;
+    view.y = sy - (sy - view.y) * real;
+    view.k = k2;
+    opts.onView();
+  }
+
+  svg.addEventListener('pointerdown', onDown);
+  svg.addEventListener('pointermove', onMove);
+  svg.addEventListener('pointerup', onUp);
+  svg.addEventListener('pointercancel', onUp);
+  svg.addEventListener('wheel', onWheel, { passive: false });
+
+  // ------------------------------------------------------------------- api
+  function fit() {
+    const m = model();
+    const size = svgSize();
+    if (!m.blocks.length) {
+      view.k = 1;
+      view.x = size.w / 2 - 106;
+      view.y = size.h / 2 - 60;
+      render();
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const b of m.blocks) {
+      const r = blockRect(b);
+      minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
+    }
+    const pad = 60;
+    const bw = Math.max(1, maxX - minX);
+    const bh = Math.max(1, maxY - minY);
+    const k = Math.max(0.2, Math.min(1.4, Math.min((size.w - pad * 2) / bw, (size.h - pad * 2) / bh)));
+    view.k = k;
+    view.x = (size.w - bw * k) / 2 - minX * k;
+    view.y = (size.h - bh * k) / 2 - minY * k;
+    render();
+    opts.onView();
+  }
+
+  function centerPoint() {
+    const size = svgSize();
+    return clientToCanvas(size.w / 2 + svg.getBoundingClientRect().left, size.h / 2 + svg.getBoundingClientRect().top);
+  }
+
+  return {
+    render: render,
+    fit: fit,
+    centerPoint: centerPoint,
+    clientToCanvas: clientToCanvas,
+    zoomBy: function (f) {
+      const size = svgSize();
+      zoomAt(size.w / 2, size.h / 2, f);
+      render();
+    },
+    resetZoom: function () {
+      const size = svgSize();
+      const c = { x: size.w / 2, y: size.h / 2 };
+      view.x = c.x - (c.x - view.x) * (1 / view.k);
+      view.y = c.y - (c.y - view.y) * (1 / view.k);
+      view.k = 1;
+      render();
+      opts.onView();
+    },
+    getSelection: function () { return selection; },
+    setSelection: function (s) { selection = s; render(); },
+    clearSelection: function () { selection = null; pending = null; tempWire = null; render(); },
+    deleteSelection: function () {
+      if (!selection) return false;
+      if (selection.kind === 'block') opts.deleteBlock(selection.id);
+      else if (selection.kind === 'wire') opts.deleteWire(selection.id);
+      selection = null;
+      render();
+      return true;
+    },
+    isPending: function () { return !!pending; },
+    getView: function () { return Object.assign({}, view); },
+    setView: function (v) { view.x = v.x; view.y = v.y; view.k = v.k; render(); }
+  };
+}
