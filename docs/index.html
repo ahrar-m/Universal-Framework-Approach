@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Universal Framework Approach</title>
+  <meta name="description" content="Universal Framework Approach">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0b1020;
+      --card: #151b30;
+      --text: #e8ecf8;
+      --muted: #9aa4c4;
+      --accent: #6ea8fe;
+    }
+    @media (prefers-color-scheme: light) {
+      :root { --bg: #f6f8fc; --card: #ffffff; --text: #131a2b; --muted: #5a6480; --accent: #1f5fd6; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 2rem 1rem;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    main { width: min(46rem, 100%); }
+    h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.15; margin: 0 0 .75rem; }
+    p.lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 2rem; }
+    .card {
+      display: block;
+      background: var(--card);
+      border: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: .75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .card strong { display: block; margin-bottom: .15rem; }
+    .card span { color: var(--muted); font-size: .92rem; }
+    a.plain { color: var(--accent); }
+    footer { margin-top: 2rem; color: var(--muted); font-size: .85rem; }
+    code { background: color-mix(in srgb, var(--muted) 18%, transparent); padding: .1rem .35rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Universal Framework Approach</h1>
+    <p class="lead">A structured approach to framing, documenting and applying reusable frameworks.</p>
+    <a class="card" href="https://github.com/ahrar-m/Universal-Framework-Approach">
+      <strong>Repository on GitHub</strong>
+      <span>Source, history and issues</span>
+    </a>
+    <a class="card" href="https://github.com/ahrar-m/Universal-Framework-Approach/blob/main/README.md">
+      <strong>README</strong>
+      <span>Project overview and how to contribute</span>
+    </a>
+    <p>Replace this page by editing <code>docs/index.html</code>. Every push to <code>main</code> redeploys the site.</p>
+    <footer>Published with GitHub Pages.</footer>
+  </main>
+</body>
+</html>
