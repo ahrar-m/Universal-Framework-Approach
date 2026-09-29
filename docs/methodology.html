@@ -191,12 +191,12 @@
 <header>
   <p class="kicker">Methodology</p>
   <h1>Methodology &mdash; Universal Framework Approach</h1>
-  <p class="lede">Every metric you care about &mdash; monthly profit, process efficiency, a product-design score &mdash; is a single main equation assembled from small blocks. Blocks plug into one another, wires carry values between them, and one green Result block gives you the final number. This page explains how that works and walks you through building a real model from scratch.</p>
+  <p class="lede">Every metric you care about &mdash; monthly profit, process efficiency, a product-design score &mdash; is a single main equation assembled from small blocks. Blocks plug into one another, wires carry values between them, and a green Result block gives you an outcome &mdash; a model can carry several results at once. This page explains how that works and walks you through building a real model from scratch.</p>
   <p class="btn-row"><a class="btn" href="index.html">Open the tool</a></p>
 </header>
 
 <h2>The idea</h2>
-<p>A spreadsheet hides its reasoning inside formulas that are invisible until you click a cell. The Universal Framework Approach makes the reasoning the artefact: a metric is one equation, and the equation is built visually out of small blocks. A <strong>Value input</strong> holds a named number. An <strong>Operation</strong> or <strong>Formula</strong> combines values. Wires carry values from one block to the next. A <strong>Result</strong> block presents the final number.</p>
+<p>A spreadsheet hides its reasoning inside formulas that are invisible until you click a cell. The Universal Framework Approach makes the reasoning the artefact: a metric is one equation, and the equation is built visually out of small blocks. A <strong>Value input</strong> holds a named number. An <strong>Operation</strong> or <strong>Formula</strong> combines values. Wires carry values from one block to the next. A <strong>Result</strong> block presents one outcome &mdash; add as many as your model needs.</p>
 <p>This beats a spreadsheet for four practical reasons:</p>
 <ul>
   <li><strong>The shape of the reasoning is visible.</strong> You can see the structure of the model at a glance, hand it to a colleague, and argue about the structure rather than about cell references.</li>
@@ -231,7 +231,7 @@
 <div class="card">
   <p class="chip chip-green">Result</p>
   <h3>The final outcome of the model</h3>
-  <p>The Result block is the outcome of the model, with an optional <code>Display unit</code> that presents it the way you want.</p>
+  <p>A Result block is one outcome of the model &mdash; add as many as you need, for example an initial investment and a monthly profit side by side. Each has an optional <code>Display unit</code> that presents it the way you want.</p>
   <p class="muted">Example: Title <code>Monthly profit</code>, Display unit <code>$</code>, showing <code>$27,700</code>.</p>
 </div>
 
@@ -319,7 +319,7 @@
 
 <h2>Keeping large models readable</h2>
 <ul>
-  <li><strong>Arrange</strong> glides the blocks into flow order: value inputs on the left, the result on the right, and columns ordered so wires stay short and crossings few. You can still drag any block afterwards &mdash; the layout is a starting point, not a lock.</li>
+  <li><strong>Arrange</strong> glides the blocks into flow order: every value input lands beside the block it is wired into (lined up with the port it feeds, instead of a far-left column), results on the right, and columns ordered so wires stay short and crossings few. Unrelated branches get their own horizontal bands, so wires from one part of the model never weave through another. You can still drag any block afterwards &mdash; the layout is a starting point, not a lock.</li>
   <li><strong>Compact</strong> shrinks every card to a mini overview that keeps the name and the live value, so a whole model fits on one screen; press it again to restore. The <code>&#8722;</code> button on a single card shrinks just that card and the <code>+</code> button expands it again, so you can mix overview and detail freely.</li>
   <li><strong>Focus</strong> &mdash; the target button on a card, or <code>Focus this branch</code> in Block settings &mdash; opens one block together with everything it is built from, on its own. This is how to work inside a large block with many sub-connections without the rest of the model in the way. <code>Show whole model</code> in the banner, or <code>Esc</code>, leaves the focus view.</li>
 </ul>
@@ -328,7 +328,7 @@
 <p>The engine tracks what kind of quantity every number is, and it checks every combination before it computes:</p>
 <ul>
   <li><strong>Adding and subtracting requires the same kind of quantity</strong> &mdash; money to money, time to time.</li>
-  <li><strong>Multiplying and dividing combines units:</strong> <code>$/unit</code> x <code>units</code> becomes <code>$</code>; <code>units</code> / <code>hrs</code> stays <code>units/hrs</code>.</li>
+  <li><strong>Multiplying and dividing combines units, and labels cancel along the way:</strong> <code>$/unit</code> x <code>units</code> becomes <code>$</code>, <code>&#8377;/tower</code> x <code>tower</code> becomes <code>&#8377;</code>, and <code>units</code> / <code>hrs</code> stays <code>units/hrs</code>.</li>
   <li><strong>Percentages and plain ratios scale without changing the unit:</strong> <code>$5</code> x <code>20%</code> is <code>$1</code>.</li>
   <li><strong>Compatible units convert automatically:</strong> <code>30 min</code> + <code>1 hr</code> is <code>90 min</code>. The result shows in the first input's unit, and a Result block can be given a display unit such as <code>hrs</code> to show <code>1.5 hrs</code>.</li>
   <li><strong>Incompatible combinations are refused</strong> with a plain-language error &mdash; money and time cannot be added.</li>
@@ -337,11 +337,11 @@
 <ul class="units">
   <li>$</li><li>k$</li><li>M$</li><li>%</li><li>x</li><li>num</li><li>units</li><li>users</li><li>customers</li><li>hrs</li><li>min</li><li>days</li><li>$/unit</li><li>units/hrs</li><li>$/hrs</li>
 </ul>
-<p>Any other word you type becomes its own unit. If your domain counts <code>widgets</code> or <code>tickets</code>, type that word and it works the same way &mdash; domain-specific models need no configuration.</p>
+<p>Any other word you type becomes its own unit. If your domain counts <code>widgets</code> or <code>tickets</code>, type that word and it works the same way &mdash; domain-specific models need no configuration. The unit box stays out of your way: it only suggests the units this model already uses, never a stock list.</p>
 
 <h2>Reading the result</h2>
 <p>Values are live everywhere: edit one input and every block and wire updates at once, so you always know the model's current answer and where it came from.</p>
-<p>The <strong>sensitivity panel</strong> ranks inputs by how much they move the result:</p>
+<p>The <strong>sensitivity panel</strong> shows every Result block outcome and, for each one, ranks how much its inputs move it:</p>
 <ul>
   <li>When an input has a <code>Min</code> and a <code>Max</code>, the engine measures the full min-to-max swing on the result.</li>
   <li>Otherwise it measures the effect of a <code>+1%</code> change in that input.</li>

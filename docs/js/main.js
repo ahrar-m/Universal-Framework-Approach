@@ -1,7 +1,7 @@
 // main.js — application controller: palette, inspector, sensitivity, persistence.
 import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, blockHasOutput, newId, isVariadicOp, opTerms, termLabel } from './engine.js';
-import { COMMON_UNITS, formatValue, formatNumber } from './units.js';
-import { createCanvas, blockRect } from './canvas.js';
+import { formatValue, formatNumber } from './units.js';
+import { createCanvas, blockRect, computeLayout } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
 import { EXAMPLES } from './examples.js';
 
@@ -264,77 +264,16 @@ function updateCompactButton() {
   btn.title = anyExpanded ? 'Shrink every card to a mini overview' : 'Restore every card to full size';
 }
 
-// Lay the model out in flow order: inputs on the left, the result on the right,
-// columns ordered to keep wires short and crossings few.
+// Lay the model out in flow order (see computeLayout in canvas.js): every
+// input beside the block it is wired into, results on the right, and every
+// unrelated branch in its own band so wires never intertwine.
 function autoArrange() {
   const blocks = model.blocks;
   if (!blocks.length) {
     toast('Add some blocks first.');
     return;
   }
-  // column = length of the longest chain of wires feeding the block
-  const depth = {};
-  for (const b of blocks) depth[b.id] = 0;
-  for (let pass = 0; pass <= blocks.length; pass++) {
-    let changed = false;
-    for (const w of model.wires) {
-      if (depth[w.to] <= depth[w.from]) { depth[w.to] = depth[w.from] + 1; changed = true; }
-    }
-    if (!changed) break;
-  }
-  const byDepth = {};
-  for (const b of blocks) {
-    const d = depth[b.id];
-    if (!byDepth[d]) byDepth[d] = [];
-    byDepth[d].push(b);
-  }
-  const columns = Object.keys(byDepth).map(Number).sort(function (a, b) { return a - b; })
-    .map(function (k) { return byDepth[k]; });
-
-  // order each column by the average position of its neighbours (a few sweeps)
-  const pos = {};
-  columns.forEach(function (col) { col.forEach(function (b, i) { pos[b.id] = i; }); });
-  function barycenter(b) {
-    const near = [];
-    for (const w of model.wires) {
-      if (w.to === b.id && pos[w.from] !== undefined) near.push(pos[w.from]);
-      if (w.from === b.id && pos[w.to] !== undefined) near.push(pos[w.to]);
-    }
-    if (!near.length) return null;
-    return near.reduce(function (sum, v) { return sum + v; }, 0) / near.length;
-  }
-  for (let sweep = 0; sweep < 6; sweep++) {
-    const order = sweep % 2 === 0 ? columns : columns.slice().reverse();
-    for (const col of order) {
-      const decorated = col.map(function (b, i) { return { b: b, key: barycenter(b), i: i }; });
-      decorated.sort(function (m, n) {
-        if (m.key === null && n.key === null) return m.i - n.i;
-        if (m.key === null) return 1;
-        if (n.key === null) return -1;
-        return (m.key - n.key) || (m.i - n.i);
-      });
-      decorated.forEach(function (d, i) { col[i] = d.b; pos[d.b.id] = i; });
-    }
-  }
-
-  // place the columns left to right, stacking cards with a gap
-  const colGap = 96;
-  const rowGap = 34;
-  const cardW = 212;
-  const heights = columns.map(function (col) {
-    return col.reduce(function (sum, b) { return sum + blockRect(b).h; }, 0) + rowGap * Math.max(0, col.length - 1);
-  });
-  const tallest = Math.max.apply(null, heights);
-  let x = 0;
-  const targets = {};
-  columns.forEach(function (col, ci) {
-    let y = (tallest - heights[ci]) / 2;
-    for (const b of col) {
-      targets[b.id] = { x: Math.round(x), y: Math.round(y) };
-      y += blockRect(b).h + rowGap;
-    }
-    x += cardW + colGap;
-  });
+  const targets = computeLayout(model).targets;
   // glide the cards (and the camera) to the new layout instead of snapping
   animateToTargets(targets, function () {
     saveSoon();
@@ -485,13 +424,6 @@ function clearSiteData() {
 }
 
 function addBlock(type) {
-  if (type === 'result' && model.blocks.some(function (b) { return b.type === 'result'; })) {
-    const existing = model.blocks.find(function (b) { return b.type === 'result'; });
-    canvasView.setSelection({ kind: 'block', id: existing.id });
-    renderSettings(existing.id);
-    toast('This model already has a Result block — it is selected.');
-    return;
-  }
   const c = canvasView.centerPoint();
   const spot = findFreeSpot(c.x - 106, c.y - 60);
   const block = makeBlock(type, spot.x, spot.y);
@@ -519,7 +451,7 @@ function recompute() {
 }
 
 function renderIssues(evalResult) {
-  const issues = validateModel(model).slice();
+  const issues = validateModel(model, evalResult.values).slice();
   for (const err of evalResult.errors) {
     if (issues.indexOf(err) < 0) issues.push(err);
   }
@@ -537,28 +469,38 @@ function renderIssues(evalResult) {
 
 function renderSensitivity(evalResult) {
   const parts = [];
-  if (result && !result.error) {
-    parts.push('<div class="result-readout"><div class="rr-label">Final result</div><div class="rr-value">' + escapeHtml(result.display) + '</div></div>');
-  } else if (result && result.error) {
-    parts.push('<div class="result-readout"><div class="rr-label">Final result</div><div class="rr-value err">' + escapeHtml(result.error) + '</div></div>');
-  } else {
-    parts.push('<div class="result-readout"><div class="rr-label">Final result</div><div class="rr-value err">Wire something into the Result block</div></div>');
-  }
-
-  const sens = sensitivity(model, result);
-  if (!sens.rows.length) {
-    parts.push('<p class="panel-sub">Add Value inputs to see which one drives the outcome.</p>');
+  const results = evalResult.results || [];
+  if (!results.length) {
+    parts.push('<div class="result-readout"><div class="rr-label">Result</div><div class="rr-value err">Wire something into a Result block</div></div>');
     els.sensitivityBody.innerHTML = parts.join('');
     return;
   }
-  parts.push('<p class="panel-sub">Ranked by how much the final result moves when the input changes. Inputs with a min and a max are measured across that range; otherwise a +1% change is used.</p>');
-  for (const row of sens.rows) {
-    const width = Math.max(3, Math.round(row.share * 100));
-    parts.push('<div class="sens-row">' +
-      '<div class="sens-head"><span class="sens-name">' + escapeHtml(row.name) + '</span>' +
-      '<span class="sens-impact">' + escapeHtml(row.display) + '</span></div>' +
-      '<div class="sens-bar"><div class="sens-fill" style="width:' + width + '%"></div></div>' +
-      '<div class="sens-detail">' + escapeHtml(row.detail) + '</div></div>');
+  // one readout per Result block: a model may carry several outcomes
+  for (const r of results) {
+    parts.push('<div class="result-readout"><div class="rr-label">' + escapeHtml(r.title) + '</div>' +
+      '<div class="rr-value' + (r.error ? ' err' : '') + '">' + escapeHtml(r.error ? r.error : r.display) + '</div></div>');
+  }
+  let anyRows = false;
+  for (const r of results) {
+    if (r.error) continue;
+    const sens = sensitivity(model, r.id);
+    if (!sens.rows.length) continue;
+    anyRows = true;
+    parts.push('<div class="sens-section"><div class="sens-title">What moves ' + escapeHtml(r.title) + '</div>');
+    for (const row of sens.rows) {
+      const width = Math.max(3, Math.round(row.share * 100));
+      parts.push('<div class="sens-row">' +
+        '<div class="sens-head"><span class="sens-name">' + escapeHtml(row.name) + '</span>' +
+        '<span class="sens-impact">' + escapeHtml(row.display) + '</span></div>' +
+        '<div class="sens-bar"><div class="sens-fill" style="width:' + width + '%"></div></div>' +
+        '<div class="sens-detail">' + escapeHtml(row.detail) + '</div></div>');
+    }
+    parts.push('</div>');
+  }
+  if (!anyRows) {
+    parts.push('<p class="panel-sub">Add Value inputs to see which one drives the outcome.</p>');
+  } else {
+    parts.push('<p class="panel-sub">Ranked by how much each outcome moves when the input changes. Inputs with a min and a max are measured across that range; otherwise a +1% change is used.</p>');
   }
   els.sensitivityBody.innerHTML = parts.join('');
 }
@@ -574,10 +516,40 @@ function renderSettings(id) {
   bindSettings(block);
 }
 
+// The unit picker suggests only the units this model already uses — no defaults.
+function usedUnits() {
+  const list = [];
+  const add = function (u) {
+    const t = String(u === undefined || u === null ? '' : u).trim();
+    if (t && list.indexOf(t) < 0) list.push(t);
+  };
+  for (const b of model.blocks) {
+    if (b.type === 'input') add(b.unit);
+    else if (b.type === 'result') add(b.displayUnit);
+  }
+  return list;
+}
+
+// Keep the suggestions current as the user types a new unit.
+function refreshUnitList() {
+  const dl = document.getElementById('unitList');
+  if (!dl) return;
+  dl.innerHTML = usedUnits().map(function (u) {
+    return '<option value="' + escapeHtml(u) + '">';
+  }).join('');
+}
+
 function settingsHtml(block) {
-  const unitChips = COMMON_UNITS.map(function (u) {
+  const projectUnits = usedUnits();
+  const unitOptions = projectUnits.map(function (u) {
+    return '<option value="' + escapeHtml(u) + '">';
+  }).join('');
+  const unitChips = projectUnits.map(function (u) {
     return '<button type="button" class="chip" data-chip="' + escapeHtml(u) + '">' + escapeHtml(u) + '</button>';
   }).join('');
+  const chipsOrHint = projectUnits.length
+    ? '<div class="chip-row">' + unitChips + '</div>'
+    : '<div class="field-hint">No units in this model yet &mdash; type one and it will be suggested here.</div>';
   let html = '';
   const status = values[block.id];
   if (status && status.error) {
@@ -588,9 +560,9 @@ function settingsHtml(block) {
     html += '<div class="field-row">' +
       field('Value', '<input type="number" step="any" data-field="value" value="' + escapeHtml(block.value) + '">') +
       field('Unit', '<input type="text" list="unitList" data-field="unit" value="' + escapeHtml(block.unit || '') + '" spellcheck="false">') +
-      '</div><datalist id="unitList">' + COMMON_UNITS.map(function (u) { return '<option value="' + escapeHtml(u) + '">'; }).join('') + '</datalist>';
-    html += '<div class="chip-row">' + unitChips + '</div>';
-    html += '<div class="field-hint">Units are checked everywhere: <code>$/unit</code> times <code>units</code> becomes <code>$</code>. Unknown words like <code>tickets</code> become their own unit.</div>';
+      '</div><datalist id="unitList">' + unitOptions + '</datalist>';
+    html += chipsOrHint;
+    html += '<div class="field-hint">Units are checked everywhere and labels cancel: <code>$/unit</code> times <code>units</code> becomes <code>$</code>. Unknown words like <code>tickets</code> become their own unit. Suggestions come from the units already used in this model.</div>';
     html += '<div class="field-row">' +
       field('Min', '<input type="number" step="any" data-field="min" value="' + escapeHtml(block.min === null || block.min === undefined ? '' : block.min) + '" placeholder="optional">') +
       field('Likely', '<input type="number" step="any" data-field="likely" value="' + escapeHtml(block.likely === null || block.likely === undefined ? '' : block.likely) + '" placeholder="optional">') +
@@ -630,8 +602,9 @@ function settingsHtml(block) {
     html += '<div class="field-hint">Use the input names in the expression: ' + (names || 'add an input first') + '. Functions: <code>min</code> <code>max</code> <code>round</code> <code>floor</code> <code>ceil</code> <code>abs</code> <code>sqrt</code> <code>pow</code> <code>exp</code> <code>ln</code> <code>log</code> <code>sign</code>.</div>';
   } else if (block.type === 'result') {
     html += field('Title', '<input type="text" data-field="title" value="' + escapeHtml(block.title || '') + '" spellcheck="false">');
-    html += field('Display unit', '<input type="text" list="unitList" data-field="displayUnit" value="' + escapeHtml(block.displayUnit || '') + '" placeholder="leave empty to infer" spellcheck="false"><datalist id="unitList">' + COMMON_UNITS.map(function (u) { return '<option value="' + escapeHtml(u) + '">'; }).join('') + '</datalist>');
-    html += '<div class="field-hint">Optional. Show the result in a unit of the same kind, for example <code>hrs</code> instead of <code>min</code>.</div>';
+    html += field('Display unit', '<input type="text" list="unitList" data-field="displayUnit" value="' + escapeHtml(block.displayUnit || '') + '" placeholder="leave empty to infer" spellcheck="false"><datalist id="unitList">' + unitOptions + '</datalist>');
+    html += chipsOrHint;
+    html += '<div class="field-hint">Optional. Show the result in a unit of the same kind, for example <code>hrs</code> instead of <code>min</code>. Add as many Result blocks as you need &mdash; each is its own outcome.</div>';
   }
   html += '<div class="field-row">' +
     '<button type="button" class="btn" data-focusbranch="1" title="Show only this block and everything it is built from">Focus this branch</button>' +
@@ -649,7 +622,9 @@ function bindSettings(block) {
   const body = els.settingsBody;
   body.querySelectorAll('[data-chip]').forEach(function (chip) {
     chip.addEventListener('click', function () {
-      block.unit = chip.getAttribute('data-chip');
+      const u = chip.getAttribute('data-chip');
+      if (block.type === 'result') block.displayUnit = u;
+      else block.unit = u;
       renderSettings(block.id);
       saveSoon();
       recompute();
@@ -758,6 +733,7 @@ function onSettingsInput(e) {
     } else {
       block[field] = el.value;
     }
+    if (field === 'unit' || field === 'displayUnit') refreshUnitList();
     if (field === 'op') {
       // a two-input operation keeps only its first two inputs
       if (!isVariadicOp(block.op)) {

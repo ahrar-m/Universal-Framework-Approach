@@ -372,15 +372,26 @@ export function evaluateModel(model, overrides) {
     if (out.error) errors.push(out.error);
   }
 
-  const resultBlock = model.blocks.filter(function (b) { return b.type === 'result'; })[0];
-  let result = null;
-  if (resultBlock) {
-    const r = state[resultBlock.id];
+  // Every Result block is an outcome in its own right; a model may have several.
+  // `result` stays as the first one for callers that only need a single outcome.
+  const results = model.blocks.filter(function (b) { return b.type === 'result'; }).map(function (rb) {
+    const r = state[rb.id];
+    const entry = { id: rb.id, title: blockTitle(rb) };
     if (r && !r.error) {
-      result = { value: r.v, unit: r.u, display: formatValue(r.v, r.u) };
-    } else if (r) {
-      result = { error: r.error };
+      entry.value = r.v;
+      entry.unit = r.u;
+      entry.display = formatValue(r.v, r.u);
+    } else {
+      entry.error = r ? r.error : 'Block not found';
     }
+    return entry;
+  });
+  let result = null;
+  if (results.length) {
+    const first = results[0];
+    result = first.error
+      ? { id: first.id, error: first.error }
+      : { id: first.id, value: first.value, unit: first.unit, display: first.display };
   }
 
   const values = {};
@@ -395,9 +406,10 @@ export function evaluateModel(model, overrides) {
   }
 
   return {
-    ok: errors.length === 0 && !!result && !result.error,
+    ok: errors.length === 0 && results.length > 0 && results.every(function (r) { return !r.error; }),
     values: values,
     result: result,
+    results: results,
     errors: dedupe(errors)
   };
 }
@@ -447,9 +459,21 @@ export function portLabel(block, portId) {
 // Sensitivity: which input moves the result most?
 // ---------------------------------------------------------------------------
 
-export function sensitivity(model, baseResult) {
+export function sensitivity(model, resultRef) {
+  // resultRef: the id of the Result block to measure against (or an entry with
+  // an id). Falls back to the first Result block when it names nothing.
+  const resultId = typeof resultRef === 'string' ? resultRef : (resultRef && resultRef.id) || null;
+  const pick = function (evalResult) {
+    if (resultId && evalResult.results) {
+      for (const entry of evalResult.results) {
+        if (entry.id === resultId) return entry;
+      }
+    }
+    return evalResult.result;
+  };
   const inputs = model.blocks.filter(function (b) { return b.type === 'input'; });
-  const base = baseResult && baseResult.value;
+  const baseEntry = pick(evaluateModel(model));
+  const base = baseEntry && baseEntry.value;
   const rows = [];
   for (const block of inputs) {
     const unit = parseUnitSafe(block.unit);
@@ -470,8 +494,8 @@ export function sensitivity(model, baseResult) {
       lo = v;
       hi = v + step;
     }
-    const rLo = evaluateModel(model, set({}, block.id, lo / unit.s)).result;
-    const rHi = evaluateModel(model, set({}, block.id, hi / unit.s)).result;
+    const rLo = pick(evaluateModel(model, set({}, block.id, lo / unit.s)));
+    const rHi = pick(evaluateModel(model, set({}, block.id, hi / unit.s)));
     if (!rLo || rLo.error || !rHi || rHi.error) continue;
     const swing = rHi.value - rLo.value;
     rows.push({
@@ -491,7 +515,7 @@ export function sensitivity(model, baseResult) {
   for (const row of rows) {
     row.share = maxImpact > 0 ? row.impact / maxImpact : 0;
   }
-  return { rows: rows, base: base, unit: baseResult && baseResult.unit ? baseResult.unit : dimensionless() };
+  return { rows: rows, base: base, unit: baseEntry && baseEntry.unit ? baseEntry.unit : dimensionless() };
 }
 
 function pickUnit(a, b) {
@@ -507,11 +531,24 @@ function set(obj, key, value) {
 // Model health checks used by the UI
 // ---------------------------------------------------------------------------
 
-export function validateModel(model) {
+export function validateModel(model, values) {
   const issues = [];
   const resultBlocks = model.blocks.filter(function (b) { return b.type === 'result'; });
-  if (resultBlocks.length === 0) issues.push('Add a Result block to see the final outcome.');
-  if (resultBlocks.length > 1) issues.push('Only one Result block is supported; keep the first.');
+  if (resultBlocks.length === 0) issues.push('Add a Result block to see an outcome.');
+  if (values) {
+    // The evaluator quietly ignores a display unit of the wrong kind of
+    // quantity — say so instead of leaving the user wondering.
+    for (const b of resultBlocks) {
+      const override = (b.displayUnit || '').trim();
+      const st = values[b.id];
+      if (!override || !st || st.error || !st.unit) continue;
+      const target = parseUnitSafe(override);
+      if (!sameDims(st.unit, target)) {
+        const natural = (st.unit && st.unit.l) ? '"' + st.unit.l + '"' : 'a plain number';
+        issues.push('Result "' + blockTitle(b) + '": display unit "' + override + '" is a different kind of quantity than its value (' + natural + ') — showing ' + natural + ' instead.');
+      }
+    }
+  }
   const seenName = {};
   for (const b of model.blocks) {
     if (b.type !== 'input') continue;

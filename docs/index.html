@@ -47,7 +47,7 @@
         </button>
         <button type="button" class="palette-item" data-type="result">
           <span class="swatch swatch-result"></span>
-          <span class="palette-text"><strong>Result</strong><em>The final outcome of the model</em></span>
+          <span class="palette-text"><strong>Result</strong><em>An outcome &mdash; add as many as you need</em></span>
         </button>
       </div>
       <h2 class="panel-title panel-title-spaced">Examples</h2>
@@ -74,7 +74,7 @@
         To remove a wire, tap it so it lights up, then tap <em>Delete wire</em> &mdash; no keyboard needed on a phone.
         <br><br>
         <strong>Keeping it readable</strong>
-        <em>Arrange</em> glides the blocks into flow order, <em>Compact</em> shrinks every card to a
+        <em>Arrange</em> glides the blocks into flow order and drops every input right next to the block it is wired into (not in a far-left column), <em>Compact</em> shrinks every card to a
         mini overview (or the &#8722; button shrinks one card), and the target button on a card opens
         just that block with everything it is built from.
       </div>
@@ -96,7 +96,7 @@
         <button type="button" id="btnWireDeselect" class="btn" title="Leave the wire on the canvas, just deselect it">Deselect</button>
       </div>
       <div class="zoom-controls" aria-hidden="false">
-        <button type="button" id="btnArrange" class="btn btn-icon" title="Glide the blocks into flow order, inputs on the left">Arrange</button>
+        <button type="button" id="btnArrange" class="btn btn-icon" title="Glide the blocks into flow order, each input beside the block it is wired into">Arrange</button>
         <button type="button" id="btnCompact" class="btn btn-icon" title="Shrink every card to a mini overview">Compact</button>
         <button type="button" id="btnZoomOut" class="btn btn-icon" title="Zoom out">−</button>
         <button type="button" id="btnZoomReset" class="btn btn-icon" title="Reset zoom">1:1</button>
@@ -114,9 +114,9 @@
       </section>
 
       <section class="panel" id="sensitivityPanel">
-        <h2 class="panel-title">What moves the result</h2>
+        <h2 class="panel-title">Results and what moves them</h2>
         <div id="sensitivityBody" class="panel-body">
-          <p class="panel-sub">Add inputs to see which one drives the outcome.</p>
+          <p class="panel-sub">Add inputs to see which one drives each outcome.</p>
         </div>
       </section>
 

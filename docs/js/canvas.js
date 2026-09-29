@@ -99,6 +99,266 @@ function wirePath(a, b) {
   return 'M ' + a.x + ' ' + a.y + ' C ' + (a.x + dx) + ' ' + a.y + ', ' + (b.x - dx) + ' ' + b.y + ', ' + b.x + ' ' + b.y;
 }
 
+// ---------------------------------------------------------------------------
+// Auto-arrange layout (pure, no DOM): flow order from inputs to results, with
+// every connected component in its own horizontal band, so unrelated branches
+// never interleave and their wires never cross each other.
+// ---------------------------------------------------------------------------
+export function computeLayout(model) {
+  const blocks = (model && model.blocks) || [];
+  const wires = (model && model.wires) || [];
+  const targets = {};
+  if (!blocks.length) return { targets: targets };
+
+  // 1. group = weakly-connected component: the set of blocks that are related
+  const parent = {};
+  for (const b of blocks) parent[b.id] = b.id;
+  function find(x) {
+    let root = x;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[x] !== root) { const next = parent[x]; parent[x] = root; x = next; }
+    return root;
+  }
+  const live = wires.filter(function (w) { return parent[w.from] !== undefined && parent[w.to] !== undefined; });
+  for (const w of live) {
+    const ra = find(w.from);
+    const rb = find(w.to);
+    if (ra !== rb) parent[ra] = rb;
+  }
+  const groupOf = {};
+  const grouped = {};
+  for (const b of blocks) {
+    const g = find(b.id);
+    groupOf[b.id] = g;
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(b);
+  }
+
+  // 2. band order, top to bottom: by where each group sits now — stable across
+  // repeated Arranges, and it respects the layout the user already had
+  const bandRank = {};
+  Object.keys(grouped).map(function (g) {
+    let sx = 0;
+    let sy = 0;
+    for (const b of grouped[g]) { sx += b.x; sy += b.y; }
+    return { g: g, cx: sx / grouped[g].length, cy: sy / grouped[g].length };
+  }).sort(function (a, b) {
+    return (a.cy - b.cy) || (a.cx - b.cx) || (a.g < b.g ? -1 : 1);
+  }).forEach(function (entry, i) { bandRank[entry.g] = i; });
+
+  // 3. column = length of the longest chain of wires feeding the block
+  const depth = {};
+  for (const b of blocks) depth[b.id] = 0;
+  for (let pass = 0; pass <= blocks.length; pass++) {
+    let changed = false;
+    for (const w of live) {
+      if (depth[w.to] <= depth[w.from]) { depth[w.to] = depth[w.from] + 1; changed = true; }
+    }
+    if (!changed) break;
+  }
+  const byDepth = {};
+  for (const b of blocks) {
+    const d = depth[b.id];
+    if (!byDepth[d]) byDepth[d] = [];
+    byDepth[d].push(b);
+  }
+  const columns = Object.keys(byDepth).map(Number).sort(function (a, b) { return a - b; })
+    .map(function (k) { return byDepth[k]; });
+
+  // 4. order each column: a group stays contiguous in its band, and inside the
+  // band neighbours pull on each other (a few sweeps)
+  const pos = {};
+  columns.forEach(function (col) { col.forEach(function (b, i) { pos[b.id] = i; }); });
+  function barycenter(b) {
+    const near = [];
+    for (const w of live) {
+      if (w.to === b.id && pos[w.from] !== undefined) near.push(pos[w.from]);
+      if (w.from === b.id && pos[w.to] !== undefined) near.push(pos[w.to]);
+    }
+    if (!near.length) return null;
+    return near.reduce(function (sum, v) { return sum + v; }, 0) / near.length;
+  }
+  for (let sweep = 0; sweep < 6; sweep++) {
+    const order = sweep % 2 === 0 ? columns : columns.slice().reverse();
+    for (const col of order) {
+      const decorated = col.map(function (b, i) {
+        return { b: b, band: bandRank[groupOf[b.id]], key: barycenter(b), i: i };
+      });
+      decorated.sort(function (m, n) {
+        if (m.band !== n.band) return m.band - n.band;
+        if (m.key === null && n.key === null) return m.i - n.i;
+        if (m.key === null) return 1;
+        if (n.key === null) return -1;
+        return (m.key - n.key) || (m.i - n.i);
+      });
+      decorated.forEach(function (d, i) { col[i] = d.b; pos[d.b.id] = i; });
+    }
+  }
+
+  // 5. crossing reduction: swap neighbours while it strictly reduces crossings
+  const colOf = {};
+  columns.forEach(function (col, ci) { col.forEach(function (b) { colOf[b.id] = ci; }); });
+  const edges = live.filter(function (w) { return pos[w.from] !== undefined && pos[w.to] !== undefined; });
+  function crossingScore() {
+    let n = 0;
+    for (let i = 0; i < edges.length; i++) {
+      for (let j = i + 1; j < edges.length; j++) {
+        const w1 = edges[i];
+        const w2 = edges[j];
+        if (colOf[w1.from] !== colOf[w2.from] || colOf[w1.to] !== colOf[w2.to]) continue;
+        const a = pos[w1.from] - pos[w2.from];
+        const b = pos[w1.to] - pos[w2.to];
+        if (a * b < 0) n++;
+      }
+    }
+    return n;
+  }
+  let score = crossingScore();
+  for (let iter = 0; iter < 8 && score > 0; iter++) {
+    let improved = false;
+    for (const col of columns) {
+      for (let i = 0; i + 1 < col.length; i++) {
+        const a = col[i];
+        const b = col[i + 1];
+        // never swap across a band boundary: that would interleave unrelated groups
+        if (groupOf[a.id] !== groupOf[b.id]) continue;
+        col[i] = b; col[i + 1] = a;
+        pos[a.id] = i + 1; pos[b.id] = i;
+        const next = crossingScore();
+        if (next < score) { score = next; improved = true; }
+        else {
+          col[i] = a; col[i + 1] = b;
+          pos[a.id] = i; pos[b.id] = i + 1;
+        }
+      }
+    }
+    if (!improved) break;
+  }
+
+  // 6. place: one horizontal band per group, columns left to right. Blocks that
+  // take a wire keep the grid above, but an input - a block with no incoming
+  // wires of its own - hugs the block it feeds instead of being parked in a
+  // far-left column: it lands in the slot just left of its consumer, lined up
+  // with the port it plugs into, and only slides when something else already
+  // sits there. So every input appears exactly where it is linked.
+  const colGap = 96;
+  const rowGap = 34;
+  const bandGap = 72;
+  const cardW = 212;
+  const step = cardW + colGap;
+  const bandCount = Object.keys(grouped).length;
+  const itemsOf = {};
+  for (let band = 0; band < bandCount; band++) itemsOf[band] = [];
+
+  const blockById = {};
+  for (const b of blocks) blockById[b.id] = b;
+  const incoming = {};
+  for (const w of live) incoming[w.to] = true;
+  const outsOf = {};
+  for (const w of live) {
+    if (!outsOf[w.from]) outsOf[w.from] = [];
+    outsOf[w.from].push(w);
+  }
+
+  // vertical position (inside the card) of the port a wire lands on
+  function portLocalOf(block, portId) {
+    const g = blockGeometry(block);
+    let idx = 0;
+    for (let i = 0; i < g.ports.length; i++) if (g.ports[i].id === portId) idx = i;
+    return portLocalY(g, idx);
+  }
+
+  // first free vertical gap at this x, as close to `desired` as possible
+  function freeY(list, x, w, h, desired) {
+    const busy = list.filter(function (it) { return it.x < x + w && x < it.x + it.w; });
+    const spans = busy.map(function (it) { return [it.y - rowGap, it.y + it.h + rowGap]; })
+      .sort(function (m, n) { return m[0] - n[0]; });
+    const merged = [];
+    for (const s of spans) {
+      const last = merged.length ? merged[merged.length - 1] : null;
+      if (last && s[0] <= last[1]) { if (s[1] > last[1]) last[1] = s[1]; }
+      else merged.push([s[0], s[1]]);
+    }
+    let best = null;
+    let floor = -Infinity;
+    for (const m of merged) {
+      if (m[0] - floor >= h) {
+        const y = Math.min(Math.max(desired, floor), m[0] - h);
+        if (best === null || Math.abs(y - desired) < Math.abs(best - desired)) best = y;
+      }
+      floor = m[1];
+    }
+    const below = Math.max(desired, floor);
+    if (best === null || Math.abs(below - desired) < Math.abs(best - desired)) best = below;
+    return best;
+  }
+
+  // 6a. inputs are the blocks that hug; everything else (and an input with
+  // nothing to feed) takes its slot in the column grid built above
+  const hugIds = {};
+  for (const b of blocks) {
+    if (!incoming[b.id] && outsOf[b.id] && outsOf[b.id].length) hugIds[b.id] = true;
+  }
+  columns.forEach(function (col, ci) {
+    const yOf = {};
+    for (const b of col) {
+      if (hugIds[b.id]) continue;
+      const band = bandRank[groupOf[b.id]];
+      const g = blockGeometry(b);
+      const y = yOf[band] || 0;
+      yOf[band] = y + g.h + rowGap;
+      itemsOf[band].push({ id: b.id, x: ci * step, y: y, w: g.w, h: g.h });
+    }
+  });
+
+  // 6b. each input sits in the slot just left of its consumer (the leftmost of
+  // them when it feeds several), lined up with the port it plugs into
+  const itemById = {};
+  Object.keys(itemsOf).forEach(function (band) {
+    for (const it of itemsOf[band]) itemById[it.id] = it;
+  });
+  const huggers = [];
+  for (const b of blocks) {
+    if (!hugIds[b.id]) continue;
+    const outs = outsOf[b.id];
+    let x = null;
+    let sum = 0;
+    let n = 0;
+    for (const w of outs) {
+      const c = itemById[w.to];
+      if (!c) continue;
+      const cx = (colOf[w.to] - 1) * step;
+      if (x === null || cx < x) x = cx;
+      sum += c.y + portLocalOf(blockById[w.to], w.toPort);
+      n++;
+    }
+    if (x === null || !n) continue;
+    const g = blockGeometry(b);
+    huggers.push({ band: bandRank[groupOf[b.id]], id: b.id, x: x, w: g.w, h: g.h, desired: sum / n - g.h / 2 });
+  }
+  huggers.sort(function (m, n) { return (m.band - n.band) || (m.desired - n.desired); });
+  for (const h of huggers) {
+    const y = freeY(itemsOf[h.band], h.x, h.w, h.h, h.desired);
+    itemsOf[h.band].push({ id: h.id, x: h.x, y: y, w: h.w, h: h.h });
+  }
+
+  // 6c. bands stack downward; a band starts where its highest card starts
+  let cursor = 0;
+  for (let band = 0; band < bandCount; band++) {
+    let top = 0;
+    let height = 0;
+    for (const it of itemsOf[band]) {
+      if (it.y < top) top = it.y;
+      if (it.y + it.h > height) height = it.y + it.h;
+    }
+    for (const it of itemsOf[band]) {
+      targets[it.id] = { x: Math.round(it.x), y: Math.round(cursor + it.y - top) };
+    }
+    cursor += height - top + bandGap;
+  }
+  return { targets: targets };
+}
+
 export function createCanvas(opts) {
   const svg = opts.svg;
   const view = { x: 0, y: 0, k: 1 };
@@ -332,7 +592,7 @@ export function createCanvas(opts) {
     const display = val ? (val.error ? shortError(val.error) : val.display) : '—';
     const valueColor = hasError ? '#fc8181' : '#eaf1ff';
     if (block.type === 'result') {
-      out.push('<text x="14" y="' + (fy + 15) + '" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.4" fill="#8fa0c4">FINAL RESULT</text>');
+      out.push('<text x="14" y="' + (fy + 15) + '" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.4" fill="#8fa0c4">RESULT</text>');
       out.push('<text x="14" y="' + (fy + 42) + '" font-family="' + MONO + '" font-size="21" font-weight="700" fill="#68d391">' + esc(trunc(display, 20)) + '</text>');
     } else if (block.type === 'formula') {
       out.push('<text x="14" y="' + (fy + 18) + '" font-family="' + MONO + '" font-size="10.5" fill="#8fa0c4">' + esc(trunc(block.expr || 'empty expression', 28)) + '</text>');

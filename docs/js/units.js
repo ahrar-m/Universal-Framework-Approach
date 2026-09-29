@@ -1,6 +1,9 @@
 // units.js — dimensional unit algebra for the Universal Framework Approach engine.
-// A unit is a spec: { d: { DIM: exponent }, s: scaleToBase, l: displayLabel }.
+// A unit is a spec: { d: { DIM: exponent }, s: scaleToBase, l: displayLabel, f: factors }.
 // Values are carried internally in BASE units (display value x spec.s).
+// The factors f are the label algebra: [{ l: '₹', e: 1 }, { l: 'tower', e: -1 }].
+// Combining units cancels factors, so '₹/tower' x 'tower' resolves to '₹'
+// instead of the meaningless '₹/tower·tower'.
 
 const REG = {
   '$': { d: { M: 1 }, s: 1, l: '$' },
@@ -50,9 +53,6 @@ const REG = {
   'wk': { d: { T: 1 }, s: 604800, l: 'weeks' }
 };
 
-// Units shown in the unit picker (the rest still parse).
-export const COMMON_UNITS = ['$', 'k$', 'M$', '%', 'x', 'num', 'units', 'users', 'customers', 'hrs', 'min', 'days', '$/unit', 'units/hrs', '$/hrs'];
-
 export function normalizeDims(d) {
   const out = {};
   for (const k of Object.keys(d)) {
@@ -62,7 +62,7 @@ export function normalizeDims(d) {
 }
 
 export function dimensionless() {
-  return { d: {}, s: 1, l: '' };
+  return { d: {}, s: 1, l: '', f: [] };
 }
 
 export function isRatio(u) {
@@ -84,16 +84,87 @@ export function dimsKey(u) {
   return Object.keys(d).sort().map(function (k) { return k + ':' + d[k]; }).join(' ');
 }
 
+// ---------------------------------------------------------------------------
+// Factor algebra: the label side of a unit. Combining units merges factors and
+// drops the ones whose exponents cancel, which is what makes '₹/tower' x 'tower'
+// come out as '₹'.
+// ---------------------------------------------------------------------------
+
+function factorsOf(spec) {
+  return Array.isArray(spec.f) ? spec.f : [];
+}
+
+function combineFactors(a, b, op) {
+  const out = [];
+  const at = {};
+  const put = function (l, e) {
+    if (at[l] === undefined) { at[l] = out.length; out.push({ l: l, e: e }); }
+    else out[at[l]].e += e;
+  };
+  for (const x of factorsOf(a)) put(x.l, x.e);
+  for (const x of factorsOf(b)) put(x.l, op === '/' ? -x.e : x.e);
+  return out.filter(function (x) { return x.e !== 0; });
+}
+
+function scaleFactors(a, n) {
+  return factorsOf(a).map(function (x) { return { l: x.l, e: x.e * n }; })
+    .filter(function (x) { return x.e !== 0; });
+}
+
+function fmtFactor(x) {
+  return x.e === 1 ? x.l : x.l + '^' + String(x.e);
+}
+
+// '₹·tower^2/month' style labels: positives on top, negatives underneath.
+function labelFromFactors(f) {
+  const pos = f.filter(function (x) { return x.e > 0 && x.l; });
+  const neg = f.filter(function (x) { return x.e < 0 && x.l; });
+  const num = pos.map(fmtFactor).join('·');
+  const den = neg.map(function (x) { return fmtFactor({ l: x.l, e: -x.e }); }).join('·');
+  if (!num && !den) return '';
+  if (!den) return num;
+  if (!num) return '1/' + (neg.length > 1 ? '(' + den + ')' : den);
+  return num + '/' + (neg.length > 1 ? '(' + den + ')' : den);
+}
+
+// A combined unit gets the cleanest known label when it lands on one.
+function canonicalLabel(d, s) {
+  for (const key of Object.keys(REG)) {
+    const e = REG[key];
+    if (sameDims({ d: d }, { d: e.d }) && Math.abs(s - e.s) <= 1e-9 * Math.max(1, Math.abs(e.s))) {
+      return e.l;
+    }
+  }
+  return null;
+}
+
+// Finish a derived unit: snap to a known label when possible, otherwise render
+// the cancelled factors.
+function finished(d, s, f) {
+  const dims = normalizeDims(d);
+  const factors = f.filter(function (x) { return x.e !== 0; });
+  const snapped = canonicalLabel(dims, s);
+  if (snapped !== null) {
+    // a snapped ratio (x, %, plain number) carries no factor of its own
+    return { d: dims, s: s, l: snapped, f: Object.keys(dims).length ? [{ l: snapped, e: 1 }] : [] };
+  }
+  return { d: dims, s: s, l: labelFromFactors(factors), f: factors };
+}
+
+function copyOf(spec) {
+  return { d: normalizeDims(spec.d), s: spec.s, l: spec.l, f: factorsOf(spec).slice() };
+}
+
 function lookup(token, original) {
   const key = token.toLowerCase();
   if (Object.prototype.hasOwnProperty.call(REG, key)) {
     const e = REG[key];
-    return { d: Object.assign({}, e.d), s: e.s, l: e.l };
+    return { d: Object.assign({}, e.d), s: e.s, l: e.l, f: e.l ? [{ l: e.l, e: 1 }] : [] };
   }
   // Unknown tokens become custom dimensions so the tool stays domain-agnostic.
   const dim = {};
   dim[original] = 1;
-  return { d: dim, s: 1, l: original };
+  return { d: dim, s: 1, l: original, f: [{ l: original, e: 1 }] };
 }
 
 function tokenSpec(text) {
@@ -112,7 +183,16 @@ function tokenSpec(text) {
   return powUnit(spec, power);
 }
 
+function rawCombine(a, b, op) {
+  const d = Object.assign({}, a.d);
+  for (const k of Object.keys(b.d)) {
+    d[k] = (d[k] || 0) + (op === '/' ? -b.d[k] : b.d[k]);
+  }
+  return { d: normalizeDims(d), s: op === '/' ? a.s / b.s : a.s * b.s, l: '', f: combineFactors(a, b, op) };
+}
+
 // Parse a unit string such as "$", "units/hrs", "$/unit", "k$".
+// The label stays exactly as typed; the factors carry the algebra.
 export function parseUnit(text) {
   const raw = (text === undefined || text === null) ? '' : String(text).trim();
   if (raw === '' || raw === '1' || raw === 'num') return dimensionless();
@@ -137,28 +217,7 @@ export function parseUnit(text) {
     const spec = tokenSpec(p.tok);
     acc = rawCombine(acc, spec, p.op);
   }
-  acc.l = raw;
-  return acc;
-
-function rawCombine(a, b, op) {
-  const d = Object.assign({}, a.d);
-  for (const k of Object.keys(b.d)) {
-    d[k] = (d[k] || 0) + (op === '/' ? -b.d[k] : b.d[k]);
-  }
-  return { d: normalizeDims(d), s: op === '/' ? a.s / b.s : a.s * b.s, l: '' };
-}
-}
-
-// A combined unit gets the cleanest known label when it lands on one.
-function canonicalize(u) {
-  for (const key of Object.keys(REG)) {
-    const e = REG[key];
-    const spec = { d: e.d, s: e.s, l: e.l };
-    if (sameDims(u, spec) && Math.abs(u.s - spec.s) <= 1e-9 * Math.max(1, Math.abs(spec.s))) {
-      return { d: normalizeDims(u.d), s: u.s, l: spec.l };
-    }
-  }
-  return u;
+  return { d: acc.d, s: acc.s, l: raw, f: acc.f };
 }
 
 export function mulUnit(a, b) {
@@ -171,25 +230,24 @@ export function divUnit(a, b) {
 
 // Multiplying by a pure ratio (%, x) simply scales the other operand.
 export function combineMul(a, b) {
-  if (isRatio(a) && isRatio(b)) return { d: {}, s: 1, l: 'x' };
-  if (isRatio(a)) return { d: Object.assign({}, b.d), s: b.s, l: b.l };
-  if (isRatio(b)) return { d: Object.assign({}, a.d), s: a.s, l: a.l };
+  if (isRatio(a) && isRatio(b)) return { d: {}, s: 1, l: 'x', f: [] };
+  if (isRatio(a)) return copyOf(b);
+  if (isRatio(b)) return copyOf(a);
   const d = Object.assign({}, a.d);
   for (const k of Object.keys(b.d)) {
     d[k] = (d[k] || 0) + b.d[k];
   }
-  return canonicalize({ d: normalizeDims(d), s: a.s * b.s, l: joinLabel(a.l, b.l, '·') });
+  return finished(d, a.s * b.s, combineFactors(a, b, '*'));
 }
 
 export function combineDiv(a, b) {
-  if (isRatio(a) && isRatio(b)) return { d: {}, s: 1, l: 'x' };
-  if (isRatio(b)) return { d: Object.assign({}, a.d), s: a.s, l: a.l };
+  if (isRatio(a) && isRatio(b)) return { d: {}, s: 1, l: 'x', f: [] };
+  if (isRatio(b)) return copyOf(a);
   const d = Object.assign({}, a.d);
   for (const k of Object.keys(b.d)) {
     d[k] = (d[k] || 0) - b.d[k];
   }
-  const label = isRatio(a) ? ('1/' + b.l) : joinLabel(a.l, b.l, '/');
-  return canonicalize({ d: normalizeDims(d), s: a.s / b.s, l: label });
+  return finished(d, a.s / b.s, combineFactors(a, b, '/'));
 }
 
 export function powUnit(a, n) {
@@ -197,17 +255,7 @@ export function powUnit(a, n) {
   for (const k of Object.keys(a.d)) {
     d[k] = a.d[k] * n;
   }
-  const l = (n === 1) ? a.l : (a.l ? a.l + '^' + n : '');
-  return canonicalize({ d: normalizeDims(d), s: Math.pow(a.s, n), l: l });
-}
-
-function joinLabel(a, b, op) {
-  const left = a || '';
-  const right = b || '';
-  if (!left && !right) return '';
-  if (!left) return (op === '/') ? ('1/' + right) : right;
-  if (!right) return left;
-  return left + op + right;
+  return finished(d, Math.pow(a.s, n), scaleFactors(a, n));
 }
 
 export function toBase(displayValue, unit) {
@@ -238,6 +286,15 @@ export function formatNumber(v) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(v);
 }
 
+// Currency-style labels (just a symbol, optionally k/M scaled) read as a prefix:
+// '₹610,000', 'k$12'. Everything else stays a suffix: '90 min', '3,000 ₹/month'.
+const CURRENCY_SYMBOLS = ['$', '₹', '€', '£', '¥'];
+
+function isCurrencyLabel(label) {
+  if (CURRENCY_SYMBOLS.indexOf(label) >= 0) return true;
+  return label.length === 2 && (label[0] === 'k' || label[0] === 'M') && CURRENCY_SYMBOLS.indexOf(label[1]) >= 0;
+}
+
 export function formatValue(baseValue, unit) {
   if (baseValue === null || baseValue === undefined || Number.isNaN(baseValue)) return '—';
   const u = unit || dimensionless();
@@ -246,7 +303,7 @@ export function formatValue(baseValue, unit) {
   const num = formatNumber(disp);
   if (!label) return num;
   if (label === '%') return num + '%';
-  if (label === '$' || label === 'k$' || label === 'M$') return label + num;
+  if (isCurrencyLabel(label)) return label + num;
   return num + ' ' + label;
 }
 

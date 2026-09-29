@@ -2,7 +2,7 @@
 
 A visual, block-based modelling tool. Any calculation — profit, process efficiency, a
 product-design score — is assembled from **small blocks that plug into one main
-equation**, and the final block gives the outcome. It replaces the spreadsheet with a
+equation**, and green Result blocks give the outcomes &mdash; as many as you need. It replaces the spreadsheet with a
 canvas: every intermediate value is visible, units are dimensionally checked, and the
 tool tells you **which input actually drives the result**.
 
@@ -14,14 +14,14 @@ tool tells you **which input actually drives the result**.
 | Capability | Detail |
 | --- | --- |
 | Forgiving wiring | Blocks are cards with ports and wires carry values. Wires <strong>magnetise to the nearest legal port</strong> as you drag, dropping a wire anywhere on a card uses that card's first free input (growing a new one on Add/Multiply when needed), and touch works by tap-a-port-then-tap-the-card. Compatible ports glow while a link is being made; tap a wire to select it and press <em>Delete wire</em> to remove it &mdash; works on a phone, where there is no Delete key |
-| Auto-arrange | <code>Arrange</code> glides the blocks into flow order instead of snapping &mdash; value inputs on the left, the result on the right, columns ordered to keep wires short and crossings few |
+| Auto-arrange | <code>Arrange</code> glides the blocks into flow order instead of snapping &mdash; every value input lands beside the block it is wired into (lined up with the port it feeds, never parked in a far-left column), results on the right, columns ordered to keep wires short and crossings few, and each unrelated branch in its own horizontal band so wires never intertwine |
 | Compact cards and focus view | <code>Compact</code> (or the card's <code>&#8722;</code> button) shrinks cards to a mini name-and-value overview so a whole model fits on one screen; the target button on a card &mdash; or <code>Focus this branch</code> in Block settings &mdash; opens one block with everything it is built from, on its own |
-| Four block types | **Value input** (named number, unit, optional min/likely/max), **Operation** (add, subtract, multiply, divide, power, min, max, round, percent-of), **Formula** (typed expression over named inputs), **Result** (final outcome, optional display unit) |
+| Four block types | **Value input** (named number, unit, optional min/likely/max), **Operation** (add, subtract, multiply, divide, power, min, max, round, percent-of), **Formula** (typed expression over named inputs), **Result** (an outcome &mdash; add as many as you need, each with an optional display unit) |
 | Endless operation inputs | **Add, Multiply, Min and Max take any number of inputs** &mdash; grow or shrink the list with the block's <code>+ add input</code> row or the <code>Add input</code> button in Block settings. Empty ports are ignored, one connected input passes straight through, and every term is unit-checked. Subtract, Divide, Power, Round and Percent of keep their two ports |
-| Dimensional unit checking | Add/subtract require the same kind of quantity; multiply/divide combine units (`$/unit × units → $`); percentages scale without changing the unit; compatible units convert automatically (`30 min + 1 hr → 90 min`); incompatible mixes are refused in plain language |
-| Domain-agnostic units | Knows `$`, `k$`, `M$`, `%`, `x`, `units`, `users`, `customers`, `hrs`, `min`, `days`, `$/unit`, `units/hrs`, `$/hrs` — and any other word you type becomes its own unit |
+| Dimensional unit checking | Add/subtract require the same kind of quantity; multiply/divide combine units (`$/unit × units → $`); percentages scale without changing the unit; compatible units convert automatically (`30 min + 1 hr → 90 min`); incompatible mixes are refused in plain language &mdash; and labels cancel and simplify along the way (<code>&#8377;/tower</code> &times; <code>tower</code> &rarr; <code>&#8377;</code>) |
+| Domain-agnostic units | Knows `$`, `k$`, `M$`, `%`, `x`, `units`, `users`, `customers`, `hrs`, `min`, `days`, `$/unit`, `units/hrs`, `$/hrs` — and any other word you type becomes its own unit &mdash; the unit picker suggests only the units your model already uses, never defaults |
 | Live values | Every block and wire shows its current value while you edit |
-| Sensitivity ranking | "What moves the result": inputs ranked by their effect on the final number (min→max swing when a range is given, otherwise a +1% change) |
+| Sensitivity ranking | "What moves them": inputs ranked by their effect on each result (min→max swing when a range is given, otherwise a +1% change) |
 | Examples | Three ready-made models — **Monthly profit**, **Line efficiency**, **Design score** — loadable from the Blocks palette to take apart |
 | Export | Crisp vector **SVG**, high-resolution **PNG** (3x), and **JSON** model files in/out. Every export is suffixed with a date-timestamp &mdash; e.g. `monthly-profit-20250929-142530.svg` &mdash; so repeated exports never overwrite each other |
 | Clear data | One button deletes everything the site saved in your browser |

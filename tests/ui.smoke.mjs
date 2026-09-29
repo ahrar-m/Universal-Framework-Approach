@@ -264,6 +264,22 @@ ok('example replaces the model', groups().length === 9, String(groups().length))
 ok('example computes $27,700', doc.getElementById('sensitivityBody').innerHTML.indexOf('$27,700') >= 0, doc.getElementById('sensitivityBody').innerHTML.slice(0, 160));
 ok('example name set', doc.getElementById('modelName').value === 'Monthly profit', doc.getElementById('modelName').value);
 
+// ---- multiple results + unit suggestions come from the model itself ----
+palette('result');
+ok('second result block added', groups().length === 10, String(groups().length));
+wire(groups()[7].getAttribute('data-block'), groups()[9].getAttribute('data-block'), 'in');
+const sensHtml = doc.getElementById('sensitivityBody').innerHTML;
+ok('each result gets its own readout', (sensHtml.match(/result-readout/g) || []).length === 2, String((sensHtml.match(/result-readout/g) || []).length));
+ok('ranking shown per result', (sensHtml.match(/sens-title/g) || []).length === 2, String((sensHtml.match(/sens-title/g) || []).length));
+// tapping the first card selects it and shows its settings
+firePointer(svg.querySelector('g[data-block]'), 'pointerdown', 100, 100);
+firePointer(svg.querySelector('g[data-block]'), 'pointerup', 100, 100);
+const dl = doc.querySelector('#settingsBody #unitList');
+ok('unit suggestions come from the model', !!dl && dl.innerHTML.indexOf('$/unit') >= 0, dl ? dl.innerHTML : 'no datalist');
+ok('no default unit suggestions', !!dl && dl.innerHTML.indexOf('hrs') < 0 && dl.innerHTML.indexOf('customers') < 0, dl ? dl.innerHTML : 'no datalist');
+const chips = Array.from(doc.querySelectorAll('#settingsBody .chip')).map((c) => c.getAttribute('data-chip'));
+ok('chips are the model units only', chips.length > 0 && chips.every((u) => ['$/unit', 'units', '$'].indexOf(u) >= 0), chips.join(','));
+
 // clear site data
 clickSel(doc.getElementById('btnClear'));
 ok('clear empties the canvas', groups().length === 0, String(groups().length));
