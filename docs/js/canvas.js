@@ -4,10 +4,19 @@ import { formatValue } from './units.js';
 
 export const TYPE_META = {
   input: { color: '#4fd1c5', label: 'VALUE INPUT' },
-  op: { color: '#f6ad55', label: 'OPERATION' },
-  formula: { color: '#b794f4', label: 'FORMULA' },
-  result: { color: '#68d391', label: 'RESULT' }
+  compute: { color: '#f6ad55', label: 'COMPUTE' }
 };
+
+// A Compute card shows its face by colour (orange = ready operation,
+// violet = typed expression) and turns green with a RESULT label when the
+// block is marked as one of the model's outcomes.
+export function blockMeta(block) {
+  if (!block || block.type !== 'compute') return TYPE_META.input;
+  if (block.outcome) return { color: '#68d391', label: 'RESULT' };
+  return block.mode === 'expr'
+    ? { color: '#b794f4', label: 'COMPUTE' }
+    : TYPE_META.compute;
+}
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const SANS = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
@@ -48,8 +57,8 @@ export function blockGeometry(block) {
   }
   const headerH = 42;
   const rowH = 27;
-  const footerH = block.type === 'result' ? 58 : block.type === 'formula' ? 52 : 42;
-  const addRow = block.type === 'op' && isVariadicOp(block.op) ? 1 : 0;
+  const footerH = block.outcome ? 58 : (block.type === 'compute' && block.mode === 'expr') ? 52 : 42;
+  const addRow = block.type === 'compute' && block.mode !== 'expr' && isVariadicOp(block.op) ? 1 : 0;
   const rows = Math.max(1, ports.length) + addRow;
   const h = headerH + rows * rowH + footerH;
   return { w: w, h: h, headerH: headerH, rowH: rowH, footerH: footerH, rows: rows, ports: ports, addRow: addRow, collapsed: false };
@@ -100,7 +109,7 @@ function wirePath(a, b) {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-arrange layout (pure, no DOM): flow order from inputs to results, with
+// Auto-arrange layout (pure, no DOM): flow order from inputs onwards, with
 // every connected component in its own horizontal band, so unrelated branches
 // never interleave and their wires never cross each other.
 // ---------------------------------------------------------------------------
@@ -425,7 +434,7 @@ export function createCanvas(opts) {
       if (!from || !to) continue;
       const a = outPoint(from);
       const b = portPoint(to, w.toPort);
-      const meta = TYPE_META[from.type] || TYPE_META.input;
+      const meta = blockMeta(from);
       const d = wirePath(a, b);
       const selected = selection && selection.kind === 'wire' && selection.id === w.id;
       const upValue = vals[from.id];
@@ -515,7 +524,7 @@ export function createCanvas(opts) {
   }
 
   function renderBlock(block, val) {
-    const meta = TYPE_META[block.type] || TYPE_META.input;
+    const meta = blockMeta(block);
     const g = blockGeometry(block);
     const selected = selection && selection.kind === 'block' && selection.id === block.id;
     const hasError = val && val.error;
@@ -524,7 +533,7 @@ export function createCanvas(opts) {
     out.push('<g data-block="' + esc(block.id) + '" transform="translate(' + block.x + ' ' + block.y + ')" style="cursor:grab">');
 
     // card
-    const fill = block.type === 'result' ? 'url(#resultGrad)' : '#111c33';
+    const fill = block.outcome ? 'url(#resultGrad)' : '#111c33';
     out.push('<rect x="0" y="0" width="' + g.w + '" height="' + g.h + '" rx="14" fill="' + fill + '" stroke="' + stroke + '" stroke-opacity="' + (selected ? 0.95 : 0.42) + '" stroke-width="' + (selected ? 2.4 : 1.4) + '" />');
     if (selected) {
       out.push('<rect x="-5" y="-5" width="' + (g.w + 10) + '" height="' + (g.h + 10) + '" rx="18" fill="none" stroke="' + stroke + '" stroke-opacity="0.28" stroke-width="1.4" />');
@@ -541,7 +550,7 @@ export function createCanvas(opts) {
     if (g.collapsed) {
       // mini card: value inline, ports as small edge dots, fold + focus buttons
       const display = val ? (val.error ? shortError(val.error) : val.display) : '—';
-      const valueColor = hasError ? '#fc8181' : (block.type === 'result' ? '#68d391' : '#eaf1ff');
+      const valueColor = hasError ? '#fc8181' : (block.outcome ? '#68d391' : '#eaf1ff');
       out.push('<text x="' + (g.w - 12) + '" y="42" text-anchor="end" font-family="' + MONO + '" font-size="12.5" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 13)) + '</text>');
       for (let i = 0; i < g.ports.length; i++) {
         const py = portLocalY(g, i);
@@ -593,13 +602,13 @@ export function createCanvas(opts) {
     out.push('<line x1="10" y1="' + fy + '" x2="' + (g.w - 10) + '" y2="' + fy + '" stroke="rgba(110,168,254,0.16)" />');
     const display = val ? (val.error ? shortError(val.error) : val.display) : '—';
     const valueColor = hasError ? '#fc8181' : '#eaf1ff';
-    if (block.type === 'result') {
+    if (block.outcome) {
       out.push('<text x="14" y="' + (fy + 15) + '" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.4" fill="#8fa0c4">RESULT</text>');
       out.push('<text x="14" y="' + (fy + 42) + '" font-family="' + MONO + '" font-size="21" font-weight="700" fill="#68d391">' + esc(trunc(display, 20)) + '</text>');
-    } else if (block.type === 'formula') {
+    } else if (block.type === 'compute' && block.mode === 'expr') {
       out.push('<text x="14" y="' + (fy + 18) + '" font-family="' + MONO + '" font-size="10.5" fill="#8fa0c4">' + esc(trunc(block.expr || 'empty expression', 28)) + '</text>');
       out.push('<text x="14" y="' + (fy + 38) + '" font-family="' + MONO + '" font-size="15" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 18)) + '</text>');
-    } else if (block.type === 'op') {
+    } else if (block.type === 'compute') {
       const op = OPS[block.op] || OPS.add;
       out.push('<text x="14" y="' + (fy + 27) + '" font-family="' + MONO + '" font-size="17" fill="' + meta.color + '">' + esc(op.symbol) + '</text>');
       out.push('<text x="46" y="' + (fy + 27) + '" font-family="' + MONO + '" font-size="15" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 16)) + '</text>');

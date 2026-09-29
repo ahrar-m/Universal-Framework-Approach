@@ -41,33 +41,9 @@
           <span class="swatch swatch-input"></span>
           <span class="palette-text"><strong>Value input</strong><em>A named number with a unit and optional range</em></span>
         </button>
-        <button type="button" class="palette-item" data-type="op">
-          <span class="swatch swatch-op"></span>
-          <span class="palette-text"><strong>Operation</strong><em>Add, subtract, multiply, divide, compare</em></span>
-        </button>
-        <button type="button" class="palette-item" data-type="formula">
-          <span class="swatch swatch-formula"></span>
-          <span class="palette-text"><strong>Formula</strong><em>A typed expression over named inputs</em></span>
-        </button>
-        <button type="button" class="palette-item" data-type="result">
-          <span class="swatch swatch-result"></span>
-          <span class="palette-text"><strong>Result</strong><em>An outcome &mdash; add as many as you need</em></span>
-        </button>
-      </div>
-      <h2 class="panel-title panel-title-spaced">Examples</h2>
-      <p class="panel-sub">Load a finished model, then take it apart and change it.</p>
-      <div class="palette-list">
-        <button type="button" class="palette-item" data-example="profit">
-          <span class="swatch swatch-example"></span>
-          <span class="palette-text"><strong>Monthly profit</strong><em>Price x volume minus costs, with ranges for sensitivity</em></span>
-        </button>
-        <button type="button" class="palette-item" data-example="efficiency">
-          <span class="swatch swatch-example"></span>
-          <span class="palette-text"><strong>Line efficiency</strong><em>Shift minutes to good units to attainment</em></span>
-        </button>
-        <button type="button" class="palette-item" data-example="design">
-          <span class="swatch swatch-example"></span>
-          <span class="palette-text"><strong>Design score</strong><em>A weighted product-design score in one formula</em></span>
+        <button type="button" class="palette-item" data-type="compute">
+          <span class="swatch swatch-compute"></span>
+          <span class="palette-text"><strong>Compute</strong><em>A ready operation or a typed expression &mdash; mark it as an outcome</em></span>
         </button>
       </div>
       <div class="palette-help">
@@ -90,7 +66,7 @@
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Model canvas"></svg>
       <div class="stage-hint" id="stageHint">
         <strong>Start here</strong>
-        Add a <em>Value input</em> from the Blocks palette, then wire it into a <em>Result</em> — or load an <em>Example</em> to take apart.
+        Add a <em>Value input</em> from the Blocks palette, wire it into a <em>Compute</em> block, then mark that Compute block as an outcome to see the result.
       </div>
       <div class="focus-bar" id="focusBar" hidden>
         <span id="focusLabel"></span>

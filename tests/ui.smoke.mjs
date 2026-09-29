@@ -89,7 +89,7 @@ function setField(name, value) {
   return true;
 }
 
-// build: price x volume -> result
+// build: price x volume -> a Compute block marked as an outcome
 palette('input');
 confirmDialog();
 ok('input block added', groups().length === 1, String(groups().length));
@@ -104,17 +104,16 @@ setField('name', 'volume');
 setField('value', 1000);
 setField('unit', 'units');
 
-palette('op');
+palette('compute');
+ok('compute dialog offers both faces', !!doc.querySelector('#dialogFields [data-dlg="mode"]') &&
+  !!doc.querySelector('#dialogFields [data-dlg="op"]') && !!doc.querySelector('#dialogFields [data-dlg="expr"]'));
+setDlg('name', 'Profit');
+setDlg('op', 'mul');
 confirmDialog();
-ok('op block added', groups().length === 3);
-ok('setField op', setField('op', 'mul'));
-
-palette('result');
-confirmDialog();
-ok('result block added', groups().length === 4);
-ok('cards show short reason, not bare error', svg.innerHTML.indexOf('connect a') >= 0 && svg.innerHTML.indexOf('connect in') >= 0, svg.innerHTML.slice(0, 0));
+ok('compute block added', groups().length === 3, String(groups().length));
+ok('op-face compute shows its operator', svg.innerHTML.indexOf('×') >= 0);
+ok('cards show short reason, not bare error', svg.innerHTML.indexOf('connect a') >= 0);
 ok('accent edge is clipped to card corners', svg.innerHTML.indexOf('clip-') >= 0);
-setField('title', 'Profit');
 
 const ids = groups().map(function (g) { return g.getAttribute('data-block'); });
 function port(id, portId) {
@@ -132,31 +131,37 @@ function wire(fromId, toId, toPort) {
 
 wire(ids[0], ids[2], 'a');
 wire(ids[1], ids[2], 'b');
-wire(ids[2], ids[3], 'in');
 
 const wireCount = (svg.innerHTML.match(/data-wire=/g) || []).length;
-ok('three wires drawn', wireCount === 3, String(wireCount));
+ok('two wires drawn', wireCount === 2, String(wireCount));
 
+ok('model check asks for an outcome', doc.getElementById('issuesBody').innerHTML.indexOf('Mark a Compute block as an outcome') >= 0, doc.getElementById('issuesBody').innerHTML.slice(0, 300));
+
+// marking the Compute block as an outcome makes it a result — without rewiring
+clickSel(doc.querySelector('#settingsBody [data-outcome]'));
+ok('outcome marking is offered on Compute', !!doc.querySelector('#settingsBody [data-outcome]'));
+ok('marked outcome gets a readout', sensReadouts() === 1, String(sensReadouts()));
 const sens = doc.getElementById('sensitivityBody').innerHTML;
-ok('result value computed', sens.indexOf('$50,000') >= 0, sens.slice(0, 400));
+ok('outcome value computed', sens.indexOf('$50,000') >= 0, sens.slice(0, 400));
 ok('sensitivity rows present', (sens.match(/sens-row/g) || []).length === 2, String((sens.match(/sens-row/g) || []).length));
+ok('marked card wears the RESULT label', svg.innerHTML.indexOf('RESULT') >= 0);
 ok('model check clean', doc.getElementById('issuesBody').innerHTML.indexOf('Everything checks out') >= 0, doc.getElementById('issuesBody').innerHTML.slice(0, 300));
+ok('marking kept the wires', (svg.innerHTML.match(/data-wire=/g) || []).length === 2, String((svg.innerHTML.match(/data-wire=/g) || []).length));
 
-// unit label change flows through the display
-setField('unit', '$');
-const svgText = svg.innerHTML;
-ok('unit label shown on card', svgText.indexOf('$/unit') >= 0 || svgText.indexOf('$') >= 0);
+// display unit is presentation for the outcome
+ok('setField displayUnit', setField('displayUnit', '$'));
+ok('display unit shown on the card', svg.innerHTML.indexOf('$50,000') >= 0, '');
 
 // save happened
 await new Promise(function (r) { setTimeout(r, 400); });
-const stored = JSON.parse(localStorage.getItem('ufa.model.v1') || 'null');
-ok('model autosaved', !!stored && stored.blocks.length === 4, JSON.stringify(stored ? stored.blocks.length : null));
+const stored = JSON.parse(localStorage.getItem('ufa.model.v2') || 'null');
+ok('model autosaved as v2', !!stored && stored.version === 2 && stored.blocks.length === 3, JSON.stringify(stored ? [stored.version, stored.blocks.length] : null));
 
 // variadic operation: endless inputs on Add / Multiply / Min / Max
 const mulId = ids[2];
 const addRow = svg.querySelector('g[data-block="' + mulId + '"] [data-addterm]');
-ok('op card offers an add-input row', !!addRow);
-ok('result card has no add-input row', !svg.querySelector('g[data-block="' + ids[3] + '"] [data-addterm]'));
+ok('op-face compute offers an add-input row', !!addRow);
+ok('value input has no add-input row', !svg.querySelector('g[data-block="' + ids[0] + '"] [data-addterm]'));
 firePointer(addRow, 'pointerdown', 100, 100);
 // the canvas re-renders on pointerdown, so release on the live node
 firePointer(svg.querySelector('g[data-block="' + mulId + '"] [data-addterm]'), 'pointerup', 100, 100);
@@ -208,10 +213,10 @@ ok('arrange glides instead of snapping', midXs.join() !== startXs.join(), 'start
 await new Promise(function (r) { setTimeout(r, 700); });
 const endXs = ids.map(cardX);
 ok('blocks are still travelling mid-glide', midXs.join() !== endXs.join(), 'mid ' + midXs.join() + ' end ' + endXs.join());
-ok('arrange orders the flow left to right', cardX(ids[0]) < cardX(ids[2]) && cardX(ids[2]) < cardX(ids[3]), [cardX(ids[0]), cardX(ids[2]), cardX(ids[3])].join(','));
+ok('arrange orders the flow left to right', cardX(ids[0]) < cardX(ids[2]) && cardX(ids[1]) < cardX(ids[2]), [cardX(ids[0]), cardX(ids[1]), cardX(ids[2])].join(','));
 
 // dropping a loose wire on a card body wires it to that card's first free input
-palette('op');
+palette('compute');
 confirmDialog();
 const extraId = groups()[groups().length - 1].getAttribute('data-block');
 const wiresBefore = (svg.innerHTML.match(/data-wire=/g) || []).length;
@@ -221,40 +226,48 @@ ok('drop on a card body wires it up', (svg.innerHTML.match(/data-wire=/g) || [])
 firePointer(svg.querySelector('g[data-block="' + extraId + '"]'), 'pointerdown', 420, 420);
 firePointer(svg.querySelector('g[data-block="' + extraId + '"]'), 'pointerup', 420, 420);
 win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
-ok('scratch block removed again', groups().length === 4, String(groups().length));
+ok('scratch block removed again', groups().length === 3, String(groups().length));
 
 // focus: open one block with everything it is built from
 pressSvgButton('g[data-block="' + ids[2] + '"] [data-focus]');
 ok('focus shows only the branch', groups().length === 3, String(groups().length));
 ok('focus banner is shown', doc.getElementById('focusBar').hidden === false && doc.getElementById('focusLabel').textContent.indexOf('Focused on') === 0, doc.getElementById('focusLabel').textContent);
 clickSel(doc.getElementById('btnShowAll'));
-ok('show all restores the model', groups().length === 4, String(groups().length));
+ok('show all restores the model', groups().length === 3, String(groups().length));
 
-// formula block with named inputs
-palette('formula');
+// a Compute block in expression mode (it starts on its operation face)
+palette('compute');
 confirmDialog();
 const fid = groups()[groups().length - 1].getAttribute('data-block');
+ok('op-face settings offer the operator', !!doc.querySelector('#settingsBody [data-field="op"]'));
+ok('mode can be switched', setField('mode', 'expr'));
+ok('expr-face settings offer named inputs', !!doc.querySelector('#settingsBody [data-addport]'));
 clickSel(doc.querySelector('#settingsBody [data-addport]'));
-ok('formula input added', !!doc.querySelector('#settingsBody [data-portname]'));
+ok('compute input added', !!doc.querySelector('#settingsBody [data-portname]'));
 setField('expr', '2 * 3');
-ok('formula evaluates on canvas', svg.innerHTML.indexOf('6') >= 0);
+ok('expression evaluates on canvas', svg.innerHTML.indexOf('6') >= 0);
+ok('expr-face compute has no add-input row', !svg.querySelector('g[data-block="' + fid + '"] [data-addterm]'));
+
+// switching a Compute block between its two faces
+ok('switching to op mode brings the operator', setField('mode', 'op') && !!doc.querySelector('#settingsBody [data-field="op"]'));
+ok('switching back to expr mode brings the expression', setField('mode', 'expr') && !!doc.querySelector('#settingsBody [data-field="expr"]'));
 
 // delete via keyboard
 firePointer(port(fid, 'out'), 'pointerdown', 200, 200);
 firePointer(svg, 'pointerup', 200, 200);
 const delEvt = new win.KeyboardEvent('keydown', { key: 'Delete', bubbles: true });
 win.dispatchEvent(delEvt);
-ok('delete key removes block', groups().length === 4, String(groups().length));
+ok('delete key removes block', groups().length === 3, String(groups().length));
 
 // touch-friendly wire removal: tap the wire, then the Delete wire button
 const wireEls = Array.from(svg.querySelectorAll('[data-wire]'));
-ok('three wires to choose from', wireEls.length === 3, String(wireEls.length));
+ok('two wires to choose from', wireEls.length === 2, String(wireEls.length));
 firePointer(wireEls[0], 'pointerdown', 250, 250);
 firePointer(svg.querySelector('[data-wire]'), 'pointerup', 250, 250);
 ok('tapping a wire opens the wire bar', doc.getElementById('wireBar').hidden === false);
 ok('wire bar names the link', doc.getElementById('wireLabel').textContent.indexOf('→') > 0, doc.getElementById('wireLabel').textContent);
 clickSel(doc.getElementById('btnDeleteWire'));
-ok('delete-wire button removes the wire', (svg.innerHTML.match(/data-wire=/g) || []).length === 2, String((svg.innerHTML.match(/data-wire=/g) || []).length));
+ok('delete-wire button removes the wire', (svg.innerHTML.match(/data-wire=/g) || []).length === 1, String((svg.innerHTML.match(/data-wire=/g) || []).length));
 ok('wire bar hides after the delete', doc.getElementById('wireBar').hidden === true);
 firePointer(svg.querySelector('[data-wire]'), 'pointerdown', 250, 250);
 firePointer(svg.querySelector('[data-wire]'), 'pointerup', 250, 250);
@@ -283,20 +296,18 @@ ok('json export name is stamped', new RegExp('^' + slug + '-[0-9]{8}-[0-9]{6}\\.
 ok('svg export name is stamped', new RegExp('^' + slug + '-[0-9]{8}-[0-9]{6}\\.svg$').test(downloads[1] || ''), downloads[1]);
 ok('png export name is stamped', new RegExp('^' + slug + '-[0-9]{8}-[0-9]{6}@3x\\.png$').test(exportName(stored, 'png', 3)), exportName(stored, 'png', 3));
 
-// examples load from the palette
-clickSel(doc.querySelector('.palette-item[data-example="profit"]'));
-ok('example replaces the model', groups().length === 9, String(groups().length));
-ok('example computes $27,700', doc.getElementById('sensitivityBody').innerHTML.indexOf('$27,700') >= 0, doc.getElementById('sensitivityBody').innerHTML.slice(0, 160));
-ok('example name set', doc.getElementById('modelName').value === 'Monthly profit', doc.getElementById('modelName').value);
-
-// ---- multiple results + unit suggestions come from the model itself ----
-palette('result');
+// ---- several outcomes in one model, and unit suggestions from the model ----
+palette('compute');
 confirmDialog();
-ok('second result block added', groups().length === 10, String(groups().length));
-wire(groups()[7].getAttribute('data-block'), groups()[9].getAttribute('data-block'), 'in');
+const secondId = groups()[groups().length - 1].getAttribute('data-block');
+setField('title', 'Check');
+setField('mode', 'expr');
+setField('expr', '2 + 2');
+clickSel(doc.querySelector('#settingsBody [data-outcome]'));
 const sensHtml = doc.getElementById('sensitivityBody').innerHTML;
-ok('each result gets its own readout', (sensHtml.match(/result-readout/g) || []).length === 2, String((sensHtml.match(/result-readout/g) || []).length));
-ok('ranking shown per result', (sensHtml.match(/sens-title/g) || []).length === 2, String((sensHtml.match(/sens-title/g) || []).length));
+ok('each outcome gets its own readout', (sensHtml.match(/result-readout/g) || []).length === 2, String((sensHtml.match(/result-readout/g) || []).length));
+ok('ranking shown per outcome', (sensHtml.match(/sens-title/g) || []).length === 2, String((sensHtml.match(/sens-title/g) || []).length));
+ok('unmarked compute is no outcome', sensReadouts() === 2, String(sensReadouts()));
 // tapping the first card selects it and shows its settings
 firePointer(svg.querySelector('g[data-block]'), 'pointerdown', 100, 100);
 firePointer(svg.querySelector('g[data-block]'), 'pointerup', 100, 100);
@@ -324,7 +335,7 @@ clickSel(doc.getElementById('btnAppMenu'));
 clickSel(doc.getElementById('btnClear'));
 ok('clear empties the canvas', groups().length === 0, String(groups().length));
 await new Promise((r) => setTimeout(r, 500));
-ok('clear empties storage and nothing re-saves', localStorage.getItem('ufa.model.v1') === null, String(localStorage.getItem('ufa.model.v1')));
+ok('clear empties storage and nothing re-saves', localStorage.getItem('ufa.model.v2') === null, String(localStorage.getItem('ufa.model.v2')));
 
 // ---- create dialog: the block is named while it is added ----
 palette('input');
@@ -343,18 +354,36 @@ ok('card carries the name from the dialog', svg.innerHTML.indexOf('price') >= 0)
 ok('dialog value lands on the block', doc.querySelector('#settingsBody [data-field="value"]').value === '50', doc.querySelector('#settingsBody [data-field="value"]') ? doc.querySelector('#settingsBody [data-field="value"]').value : 'no field');
 ok('dialog unit lands on the block', doc.querySelector('#settingsBody [data-field="unit"]').value === '$/unit');
 
-palette('result');
-ok('result dialog asks for a name only', !!doc.querySelector('#dialogFields [data-dlg="name"]') && !doc.querySelector('#dialogFields [data-dlg="value"]'));
+palette('compute');
+ok('compute dialog asks for name and the way it computes', !!doc.querySelector('#dialogFields [data-dlg="name"]') && !!doc.querySelector('#dialogFields [data-dlg="mode"]') && !doc.querySelector('#dialogFields [data-dlg="value"]'));
+ok('expression box starts hidden', doc.querySelector('#dialogFields [data-dlgshow="expr"]').hidden === true);
+const modeSel = doc.querySelector('#dialogFields [data-dlg="mode"]');
+modeSel.value = 'expr';
+modeSel.dispatchEvent(new win.Event('change', { bubbles: true }));
+ok('choosing the expression face reveals it', doc.querySelector('#dialogFields [data-dlgshow="expr"]').hidden === false && doc.querySelector('#dialogFields [data-dlgshow="op"]').hidden === true);
 win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 ok('escape cancels and adds nothing', doc.getElementById('dialogScrim').hidden === true && groups().length === 1, String(groups().length));
 
-palette('op');
-ok('operation dialog offers the operator', !!doc.querySelector('#dialogFields [data-dlg="op"]'));
+palette('compute');
+ok('operation picker is in the compute dialog', !!doc.querySelector('#dialogFields [data-dlg="op"]'));
 setDlg('name', 'Revenue');
 setDlg('op', 'mul');
 confirmDialog();
 ok('operation and name come from the dialog', svg.innerHTML.indexOf('Revenue') >= 0 && svg.innerHTML.indexOf('×') >= 0, '');
 const opId = groups()[groups().length - 1].getAttribute('data-block');
+
+// expression names become the block's input ports
+palette('compute');
+setDlg('name', 'Margin');
+setDlg('mode', 'expr');
+setDlg('expr', 'price * volume');
+confirmDialog();
+const marginId = groups()[groups().length - 1].getAttribute('data-block');
+ok('expression names become input ports', !!port(marginId, 'price') && !!port(marginId, 'volume'), svg.innerHTML.slice(0, 0));
+firePointer(port(marginId, 'out'), 'pointerdown', 200, 200);
+firePointer(svg, 'pointerup', 200, 200);
+win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+ok('expression block deleted again', groups().length === 2, String(groups().length));
 
 // ---- port menu: press-and-hold adds a block that is already wired ----
 function viewportTransform() {
@@ -372,10 +401,9 @@ const menuWiresBefore = (svg.innerHTML.match(/data-wire=/g) || []).length;
 await longPress(port(opId, 'a'), 300, 300);
 ok('long-press opens the port menu', doc.getElementById('portMenu').hidden === false);
 const inMenuHtml = doc.getElementById('portMenu').innerHTML;
-ok('input port offers feeding blocks', inMenuHtml.indexOf('Add Value input here') >= 0 && inMenuHtml.indexOf('Add Operation here') >= 0 && inMenuHtml.indexOf('Add Formula here') >= 0, inMenuHtml.slice(0, 200));
-ok('input port offers no Result', inMenuHtml.indexOf('Add Result here') < 0);
+ok('input port offers feeding blocks', inMenuHtml.indexOf('Add Value input here') >= 0 && inMenuHtml.indexOf('Add Compute here') >= 0, inMenuHtml.slice(0, 200));
 ok('port menu offers to start a wire', inMenuHtml.indexOf('Start a wire from here') >= 0);
-ok('free port offers no disconnect', inMenuHtml.indexOf('Disconnect') < 0);
+ok('free port offers no disconnect', inMenuHtml.indexOf('Disconnect') < 0, inMenuHtml.slice(0, 300));
 clickSel(doc.querySelector('#portMenu [data-portadd="input"]'));
 ok('port add opens the dialog', doc.getElementById('dialogScrim').hidden === false && doc.getElementById('dialogTitle').textContent === 'New Value input', doc.getElementById('dialogTitle').textContent);
 setDlg('name', 'cost');
@@ -388,12 +416,15 @@ ok('feeding block lands to the left of its target', cardX(costId) < cardX(opId),
 
 await longPress(port(costId, 'out'), 640, 300);
 const outMenuHtml = doc.getElementById('portMenu').innerHTML;
-ok('output port offers consuming blocks', outMenuHtml.indexOf('Add Operation here') >= 0 && outMenuHtml.indexOf('Add Formula here') >= 0 && outMenuHtml.indexOf('Add Result here') >= 0, outMenuHtml.slice(0, 200));
+ok('output port offers consuming blocks', outMenuHtml.indexOf('Add Compute here') >= 0, outMenuHtml.slice(0, 200));
 ok('output port offers no Value input', outMenuHtml.indexOf('Add Value input here') < 0);
-clickSel(doc.querySelector('#portMenu [data-portadd="result"]'));
+clickSel(doc.querySelector('#portMenu [data-portadd="compute"]'));
 setDlg('name', 'Profit');
 confirmDialog();
-ok('result added pre-wired from the port menu', (sensReadouts() === 1), String(sensReadouts()));
+ok('compute added pre-wired from the port menu', (svg.innerHTML.match(/data-wire=/g) || []).length === menuWiresBefore + 2, String((svg.innerHTML.match(/data-wire=/g) || []).length));
+ok('new compute is not an outcome yet', sensReadouts() === 0, String(sensReadouts()));
+clickSel(doc.querySelector('#settingsBody [data-outcome]'));
+ok('marking the new compute makes it an outcome', sensReadouts() === 1, String(sensReadouts()));
 
 // right-click reaches the same menu
 const priceId = groups()[0].getAttribute('data-block');

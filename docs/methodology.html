@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Methodology - Universal Framework Approach</title>
-<meta name="description" content="How the Universal Framework Approach models any metric as one main equation built from small blocks - value inputs, operations, formulas and a result - with live values, dimensional unit checking and sensitivity analysis. Includes a from-scratch walkthrough of the tool.">
+<meta name="description" content="How the Universal Framework Approach models any metric as one main equation built from small blocks - value inputs and Compute blocks, with any Compute block marked as an outcome - with live values, dimensional unit checking and sensitivity analysis. Includes a from-scratch walkthrough of the tool.">
 <style>
   :root {
     --bg: #0a0f1e;
@@ -191,53 +191,53 @@
 <header>
   <p class="kicker">Methodology</p>
   <h1>Methodology &mdash; Universal Framework Approach</h1>
-  <p class="lede">Every metric you care about &mdash; monthly profit, process efficiency, a product-design score &mdash; is a single main equation assembled from small blocks. Blocks plug into one another, wires carry values between them, and a green Result block gives you an outcome &mdash; a model can carry several results at once. This page explains how that works and walks you through building a real model from scratch.</p>
+  <p class="lede">Every metric you care about &mdash; monthly profit, process efficiency, a product-design score &mdash; is a single main equation assembled from small blocks. Blocks plug into one another, wires carry values between them, and any Compute block can be marked as an outcome &mdash; a green card carrying the RESULT label. A model can carry several outcomes at once. This page explains how that works and walks you through building a real model from scratch.</p>
   <p class="btn-row"><a class="btn" href="index.html">Open the tool</a></p>
 </header>
 
 <h2>The idea</h2>
-<p>A spreadsheet hides its reasoning inside formulas that are invisible until you click a cell. The Universal Framework Approach makes the reasoning the artefact: a metric is one equation, and the equation is built visually out of small blocks. A <strong>Value input</strong> holds a named number. An <strong>Operation</strong> or <strong>Formula</strong> combines values. Wires carry values from one block to the next. A <strong>Result</strong> block presents one outcome &mdash; add as many as your model needs.</p>
+<p>A spreadsheet hides its reasoning inside formulas that are invisible until you click a cell. The Universal Framework Approach makes the reasoning the artefact: a metric is one equation, and the equation is built visually out of small blocks. A <strong>Value input</strong> holds a named number. A <strong>Compute</strong> block combines values &mdash; either a ready operation or a typed expression over named inputs. Wires carry values from one block to the next. And any Compute block can be <strong>marked as an outcome</strong>, presenting one of the model's results &mdash; mark as many as your model needs.</p>
 <p>This beats a spreadsheet for four practical reasons:</p>
 <ul>
   <li><strong>The shape of the reasoning is visible.</strong> You can see the structure of the model at a glance, hand it to a colleague, and argue about the structure rather than about cell references.</li>
   <li><strong>Every intermediate value is exposed.</strong> Revenue, variable cost and total cost are real blocks with real numbers on them &mdash; not side calculations in columns F through K.</li>
   <li><strong>Units are checked.</strong> The engine knows what kind of quantity each number is, so a total mistakenly used as a per-unit rate is caught instead of quietly producing nonsense.</li>
-  <li><strong>You can see which input actually drives the outcome.</strong> The sensitivity panel ranks your inputs by how much they move the result.</li>
+  <li><strong>You can see which input actually drives the outcome.</strong> The sensitivity panel ranks your inputs by how much they move each outcome.</li>
 </ul>
 
-<h2>The four block types</h2>
+<h2>The two block types</h2>
 
 <div class="card">
   <p class="chip chip-teal">Value input</p>
   <h3>A named number with a unit</h3>
-  <p>A Value input is a named number with a unit and an optional <code>Min</code> / <code>Likely</code> / <code>Max</code> range. It is <em>named</em> because formulas refer to inputs by name, not by position.</p>
+  <p>A Value input is a named number with a unit and an optional <code>Min</code> / <code>Likely</code> / <code>Max</code> range. It is <em>named</em> because expressions refer to inputs by name, not by position.</p>
   <p class="muted">Example: <code>price</code> &mdash; value 49, unit <code>$/unit</code>, min 39, likely 49, max 59.</p>
 </div>
 
 <div class="card">
-  <p class="chip chip-amber">Operation</p>
+  <p class="chip chip-amber">Compute &middot; ready operation</p>
   <h3>Two ports or twenty, one calculation</h3>
-  <p>An Operation performs exactly one of: <strong>Add, Subtract, Multiply, Divide, Power, Minimum, Maximum, Round, Percent of</strong>, and the result is shown directly on the block. Subtract, Divide, Power, Round and Percent of have two input ports, <code>a</code> and <code>b</code>. <strong>Add, Multiply, Minimum and Maximum take as many inputs as you like</strong>: press <code>+ add input</code> on the block (or <code>Add input</code> in Block settings) to grow the list, and every input is folded into the one result. Empty ports are ignored, a single connected input passes straight through, and every term is checked to be the same kind of quantity.</p>
-  <p class="muted">Example: a <strong>Multiply</strong> block with <code>a</code> = price (49) and <code>b</code> = volume (1,200) shows <code>58,800</code>.</p>
+  <p>One block does all the combining: <strong>Compute</strong>. When you add it the dialog asks <em>How should it compute?</em>, and one of its two faces is a ready operation: <strong>Add, Subtract, Multiply, Divide, Power, Minimum, Maximum, Round, Percent of</strong>, with the result shown directly on the block. Subtract, Divide, Power, Round and Percent of have two input ports, <code>a</code> and <code>b</code>. <strong>Add, Multiply, Minimum and Maximum take as many inputs as you like</strong>: press <code>+ add input</code> on the block (or <code>Add input</code> in Block settings) to grow the list, and every input is folded into the one result. Empty ports are ignored, a single connected input passes straight through, and every term is checked to be the same kind of quantity.</p>
+  <p class="muted">Example: a <strong>Multiply</strong> Compute block with <code>a</code> = price (49) and <code>b</code> = volume (1,200) shows <code>58,800</code>.</p>
 </div>
 
 <div class="card">
-  <p class="chip chip-violet">Formula</p>
-  <h3>A typed expression over named inputs</h3>
-  <p>A Formula holds one typed expression over named inputs, for example <code>price * volume * (1 - churn)</code>. The block's inputs are the named ports you add to it &mdash; anything the expression references must be one of those inputs.</p>
-  <p class="muted">Example: a Formula block with inputs <code>price</code>, <code>volume</code> and <code>churn</code> can use those three names and nothing else.</p>
+  <p class="chip chip-violet">Compute &middot; typed expression</p>
+  <h3>The same block, typed out</h3>
+  <p>The other face of Compute holds one typed expression over named inputs, for example <code>price * volume * (1 - churn)</code>. The block's inputs are the named ports you add to it &mdash; anything the expression references must be one of those inputs. The expression goes through a safe parser built for this job, never code: it knows <code>min</code> <code>max</code> <code>round</code> <code>floor</code> <code>ceil</code> <code>abs</code> <code>sqrt</code> <code>pow</code> <code>exp</code> <code>ln</code> <code>log</code> and <code>sign</code>. Switch a Compute block between its two faces at any time in Block settings (<em>How it computes</em>) &mdash; wires survive wherever the ports do.</p>
+  <p class="muted">Example: a Compute block with inputs <code>price</code>, <code>volume</code> and <code>churn</code> can use those three names and nothing else.</p>
 </div>
 
 <div class="card">
-  <p class="chip chip-green">Result</p>
-  <h3>The final outcome of the model</h3>
-  <p>A Result block is one outcome of the model &mdash; add as many as you need, for example an initial investment and a monthly profit side by side. Each has an optional <code>Display unit</code> that presents it the way you want.</p>
-  <p class="muted">Example: Title <code>Monthly profit</code>, Display unit <code>$</code>, showing <code>$27,700</code>.</p>
+  <p class="chip chip-green">Marked outcome</p>
+  <h3>Any Compute block can be a result</h3>
+  <p>A result is not a block of its own. Any Compute block can be <strong>marked as an outcome</strong> with the <em>Mark as a result</em> button in Block settings. Marking gives the card green RESULT styling, an optional <code>Display unit</code> that presents the number the way you want, a place in the <em>Results and what moves them</em> panel, and its own sensitivity ranking. Marking <strong>never changes the wiring</strong>: the block still computes and still feeds any wires that leave it, so the same block can be both an outcome and an intermediate step. Mark as many as you need &mdash; an initial investment and a monthly profit side by side, for example.</p>
+  <p class="muted">Example: the <code>profit</code> Compute block (Subtract), marked as a result, Display unit <code>$</code>, showing <code>$27,700</code>.</p>
 </div>
 
 <figure>
   <div class="diagram">
-    <svg viewBox="0 0 720 340" role="img" aria-label="Diagram: two Value input blocks, price in dollars per unit and volume in units, are wired into a Multiply operation block, which is wired into a green Result block labelled monthly profit." xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <svg viewBox="0 0 720 340" role="img" aria-label="Diagram: two Value input blocks, price in dollars per unit and volume in units, are wired into a Compute block set to Multiply, whose output feeds a second Compute block marked as one of the model's outcomes - a green card labelled RESULT showing annual revenue." xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
       <rect x="0" y="0" width="720" height="340" fill="#0a0f1e"></rect>
       <g stroke="rgba(110,168,254,0.07)" stroke-width="1">
         <path d="M0 60 H720 M0 140 H720 M0 220 H720 M0 300 H720"></path>
@@ -270,8 +270,8 @@
         <rect x="285" y="128" width="185" height="92" rx="12" fill="#121a2e" stroke="rgba(246,173,85,0.5)" stroke-width="1.5"></rect>
         <rect x="285" y="128" width="185" height="28" rx="12" fill="rgba(246,173,85,0.14)"></rect>
         <rect x="285" y="144" width="185" height="12" fill="#121a2e"></rect>
-        <text x="299" y="148" fill="#f6ad55" font-size="12" letter-spacing="1.5">OPERATION</text>
-        <text x="299" y="182" fill="#e8ecf8" font-size="15">Multiply  a x b</text>
+        <text x="299" y="148" fill="#f6ad55" font-size="12" letter-spacing="1.5">COMPUTE</text>
+        <text x="299" y="182" fill="#e8ecf8" font-size="15">revenue  =  a x b</text>
         <text x="299" y="206" fill="#f6ad55" font-size="14">58,800</text>
       </g>
 
@@ -280,8 +280,8 @@
         <rect x="535" y="128" width="155" height="28" rx="12" fill="rgba(104,211,145,0.14)"></rect>
         <rect x="535" y="144" width="155" height="12" fill="#121a2e"></rect>
         <text x="549" y="148" fill="#68d391" font-size="12" letter-spacing="1.5">RESULT</text>
-        <text x="549" y="182" fill="#e8ecf8" font-size="15">monthly profit</text>
-        <text x="549" y="206" fill="#68d391" font-size="14">$27,700</text>
+        <text x="549" y="182" fill="#e8ecf8" font-size="15">annual revenue</text>
+        <text x="549" y="206" fill="#68d391" font-size="14">$705,600</text>
       </g>
 
       <g fill="#0a0f1e" stroke-width="2">
@@ -294,18 +294,18 @@
       </g>
       <text x="264" y="140" fill="#8fa0c4" font-size="13">a</text>
       <text x="264" y="216" fill="#8fa0c4" font-size="13">b</text>
-      <text x="500" y="164" fill="#8fa0c4" font-size="13">in</text>
+      <text x="472" y="164" fill="#8fa0c4" font-size="12">revenue</text>
     </svg>
   </div>
-  <figcaption>Two Value inputs feed a Multiply operation; its result feeds the Result block. Round dots are ports: the dot on the right of a block is its output, the dots on the left are inputs. Curved lines are wires, and each wire carries the value shown on the block it leaves.</figcaption>
+  <figcaption>Two Value inputs feed a Compute block set to Multiply (named <code>revenue</code>, showing <code>58,800</code>); its output feeds a second Compute block whose typed expression <code>revenue * 12</code> scales the figure to a year. That second block is marked as one of the model's outcomes, so it turns green and carries the RESULT label &mdash; but it is still an ordinary Compute block: marking never changes the wiring, and the block keeps feeding any wires that leave it. Round dots are ports: the dot on the right of a block is its output, the dots on the left are inputs. Curved lines are wires, and each wire carries the value shown on the block it leaves.</figcaption>
 </figure>
 
 <h2>How values flow</h2>
-<p>Wires connect an output port to an input port. The model is a directed acyclic graph: values travel one way, from inputs to the result. There is no back-flow and no hidden state.</p>
+<p>Wires connect an output port to an input port. The model is a directed acyclic graph: values travel one way, from the inputs onwards to the outcomes you mark. There is no back-flow and no hidden state.</p>
 <ul>
   <li><strong>Loops are refused.</strong> If wiring a connection would create a cycle, the tool rejects it. A model is a computation, not a feedback simulation.</li>
   <li><strong>Each block shows its current value.</strong> Change an input and every downstream block updates immediately.</li>
-  <li><strong>Each wire shows what it carries.</strong> You can follow a number from the input that produced it, through every intermediate step, to the result.</li>
+  <li><strong>Each wire shows what it carries.</strong> You can follow a number from the input that produced it, through every intermediate step, to the outcome it feeds.</li>
 </ul>
 
 <h2>Wiring without the fiddling</h2>
@@ -314,13 +314,13 @@
   <li><strong>Wires magnetise to ports.</strong> Drag from a port towards the next block &mdash; well before you reach it, the wire snaps to the nearest port it is allowed to reach and lights it up. Release anywhere in that area and the link is made.</li>
   <li><strong>Drop the wire on the card itself.</strong> Let go anywhere on a block and the wire lands on that block's first free input &mdash; or on its output when you drag from an input. On an Add or Multiply block whose inputs are all filled, a fresh input is grown for the wire.</li>
   <li><strong>Tap, then tap.</strong> On touch: tap the output port, then tap the destination card or its port. While you decide, every port that can accept the link glows; tapping the same port again abandons the link.</li>
-  <li><strong>Add the next block already wired.</strong> Press and hold a port on a phone &mdash; or right-click it with a mouse &mdash; and a menu offers exactly the blocks that fit there: a Value input, Operation or Formula to <em>feed</em> an input port, or an Operation, Formula or Result to <em>consume</em> an output. The new block is named in a small dialog, lands on the side the value flows from, and is connected before it appears. The same menu offers <em>Start a wire</em> and, on a connected port, <em>Disconnect</em>.</li>
+  <li><strong>Add the next block already wired.</strong> Press and hold a port on a phone &mdash; or right-click it with a mouse &mdash; and a menu offers exactly the blocks that fit there: <em>Add Value input here</em> or <em>Add Compute here</em> to <em>feed</em> an input port, and <em>Add Compute here</em> to <em>consume</em> an output. The new block is named in a small dialog, lands on the side the value flows from, and is connected before it appears. The same menu offers <em>Start a wire from here</em> and, on a connected port, <em>Disconnect</em>.</li>
   <li><strong>Removing a wire.</strong> Tap the wire &mdash; it lights up and a small bar names the link &mdash; then tap <em>Delete wire</em>. This is the phone-friendly path, where there is no Delete key to press. You can also open the destination block's settings and tap the <code>&times;</code> beside the input to drop just that wire, or press <code>Delete</code> on a keyboard.</li>
 </ul>
 
 <h2>Keeping large models readable</h2>
 <ul>
-  <li><strong>Arrange</strong> glides the blocks into flow order: every value input lands beside the block it is wired into (lined up with the port it feeds, instead of a far-left column), results on the right, and columns ordered so wires stay short and crossings few. Unrelated branches get their own horizontal bands, so wires from one part of the model never weave through another. You can still drag any block afterwards &mdash; the layout is a starting point, not a lock.</li>
+  <li><strong>Arrange</strong> glides the blocks into flow order: every value input lands beside the block it is wired into (lined up with the port it feeds, instead of a far-left column), outcomes on the right, and columns ordered so wires stay short and crossings few. Unrelated branches get their own horizontal bands, so wires from one part of the model never weave through another. You can still drag any block afterwards &mdash; the layout is a starting point, not a lock.</li>
   <li><strong>Compact</strong> shrinks every card to a mini overview that keeps the name and the live value, so a whole model fits on one screen; press it again to restore. The <code>&#8722;</code> button on a single card shrinks just that card and the <code>+</code> button expands it again, so you can mix overview and detail freely.</li>
   <li><strong>Focus</strong> &mdash; the target button on a card, or <code>Focus this branch</code> in Block settings &mdash; opens one block together with everything it is built from, on its own. This is how to work inside a large block with many sub-connections without the rest of the model in the way. <code>Show whole model</code> in the banner, or <code>Esc</code>, leaves the focus view. Entering and leaving Focus never moves the camera &mdash; on a big graph the zoom jump costs more than it helps &mdash; so the view stays exactly where you put it. Prefer the old behaviour? Switch on <em>Auto-fit camera</em> in the <em>View</em> menu at the bottom left of the canvas and Focus re-frames the branch again.</li>
 </ul>
@@ -331,7 +331,7 @@
   <li><strong>Adding and subtracting requires the same kind of quantity</strong> &mdash; money to money, time to time.</li>
   <li><strong>Multiplying and dividing combines units, and labels cancel along the way:</strong> <code>$/unit</code> x <code>units</code> becomes <code>$</code>, <code>&#8377;/tower</code> x <code>tower</code> becomes <code>&#8377;</code>, and <code>units</code> / <code>hrs</code> stays <code>units/hrs</code>.</li>
   <li><strong>Percentages and plain ratios scale without changing the unit:</strong> <code>$5</code> x <code>20%</code> is <code>$1</code>.</li>
-  <li><strong>Compatible units convert automatically:</strong> <code>30 min</code> + <code>1 hr</code> is <code>90 min</code>. The result shows in the first input's unit, and a Result block can be given a display unit such as <code>hrs</code> to show <code>1.5 hrs</code>.</li>
+  <li><strong>Compatible units convert automatically:</strong> <code>30 min</code> + <code>1 hr</code> is <code>90 min</code>. The result shows in the first input's unit, and a marked outcome can be given a display unit such as <code>hrs</code> to show <code>1.5 hrs</code>.</li>
   <li><strong>Incompatible combinations are refused</strong> with a plain-language error &mdash; money and time cannot be added.</li>
 </ul>
 <p>The tool knows these units:</p>
@@ -342,15 +342,15 @@
 
 <h2>Reading the result</h2>
 <p>Values are live everywhere: edit one input and every block and wire updates at once, so you always know the model's current answer and where it came from.</p>
-<p>The <strong>sensitivity panel</strong> shows every Result block outcome and, for each one, ranks how much its inputs move it:</p>
+<p>The <strong>Results and what moves them</strong> panel shows every marked outcome and, for each one, ranks how much its inputs move it:</p>
 <ul>
-  <li>When an input has a <code>Min</code> and a <code>Max</code>, the engine measures the full min-to-max swing on the result.</li>
+  <li>When an input has a <code>Min</code> and a <code>Max</code>, the engine measures the full min-to-max swing on the outcome.</li>
   <li>Otherwise it measures the effect of a <code>+1%</code> change in that input.</li>
 </ul>
-<p>Act on the ranking, not on your intuition. Tighten the estimate of the top driver first &mdash; if the swing from your biggest uncertainty dominates the ranking, more precision there changes the decision, and precision anywhere else does not. If the top driver is a cost you control, negotiate it. If it is a volume assumption, test it. If two inputs fight for the top spot, the decision is genuinely sensitive to both, and you should plan for both.</p>
+<p>Each marked outcome gets its own ranking, so a model with an initial investment and a monthly profit side by side tells you what moves each of them. Act on the ranking, not on your intuition. Tighten the estimate of the top driver first &mdash; if the swing from your biggest uncertainty dominates the ranking, more precision there changes the decision, and precision anywhere else does not. If the top driver is a cost you control, negotiate it. If it is a volume assumption, test it. If two inputs fight for the top spot, the decision is genuinely sensitive to both, and you should plan for both.</p>
 
 <h2>Walkthrough: build a monthly profit model from scratch</h2>
-<p>This builds a complete model using the tool's real interface. On a desktop the <strong>Blocks palette</strong> is the left panel, listing <code>Value input</code>, <code>Operation</code>, <code>Formula</code> and <code>Result</code>. On a phone the palette opens from the <code>+ Blocks</code> button, and the settings panel is called <strong>Block settings</strong>.</p>
+<p>This builds a complete model using the tool's real interface. On a desktop the <strong>Blocks palette</strong> is the left panel, listing <code>Value input</code> and <code>Compute</code>. On a phone the palette opens from the <code>+ Blocks</code> button, and the settings panel is called <strong>Block settings</strong>.</p>
 
 <ol class="steps">
   <li><strong>Start clean.</strong> Press the <em>Settings</em> gear at the top right and choose <code>New</code>. Behind that gear are all the model actions: <code>Import</code>, <code>Export JSON</code>, <code>Export SVG</code>, <code>Export PNG</code> and <code>Clear data</code>; the toolbar keeps <code>Docs</code>. The canvas view controls sit at the bottom left: <code>&#8722;</code> and <code>+</code>, plus a <em>View</em> button that pops out <code>1:1</code>, <code>Fit</code>, <code>Arrange</code>, <code>Compact</code> and <em>Auto-fit camera</em>.</li>
@@ -367,10 +367,10 @@
       </table>
     </div>
   </li>
-  <li><strong>Wire revenue.</strong> Drag from the output port (the round dot on the right of the <code>price</code> block) to an input port (a round dot on the left) of a new <code>Operation</code> block; then wire <code>volume</code> into the second input port. In Block settings set <code>Title</code> to <code>revenue</code> and <code>Operation</code> to <code>Multiply</code>. The block shows <code>58,800</code>.</li>
-  <li><strong>Wire variable cost.</strong> Add another <code>Operation</code>: <code>cost per unit</code> x <code>volume</code>, <code>Operation</code> = <code>Multiply</code>, <code>Title</code> = <code>variable cost</code>. It shows <code>21,600</code>.</li>
-  <li><strong>Wire total cost.</strong> Add an <code>Operation</code> with <code>Title</code> <code>total cost</code>, <code>Operation</code> = <code>Add</code>, wired from <code>variable cost</code> and <code>fixed costs</code>. It shows <code>31,100</code>. Add takes as many inputs as you like &mdash; press <code>+ add input</code> on the block and a third cost (fees, shipping, royalties) can fold straight into the total instead of chaining another Add block.</li>
-  <li><strong>Wire profit into the Result.</strong> Add an <code>Operation</code> with <code>Title</code> <code>profit</code>, <code>Operation</code> = <code>Subtract</code>, with <code>revenue</code> as <code>a</code> and <code>total cost</code> as <code>b</code>. It shows <code>27,700</code>. Then add a <code>Result</code> block and wire <code>profit</code> into it. In Block settings the Result has <code>Title</code> and <code>Display unit</code>: set Title to <code>Monthly profit</code> and Display unit to <code>$</code>. The result reads <code>$27,700</code>.</li>
+  <li><strong>Wire revenue.</strong> Drag from the output port (the round dot on the right of the <code>price</code> block) to an input port (a round dot on the left) of a new <code>Compute</code> block; then wire <code>volume</code> into the second input port. The add dialog asks <em>How should it compute?</em> &mdash; choose <em>Ready operation</em> and set <code>Operation</code> to <code>Multiply</code>. In Block settings set <code>Title</code> to <code>revenue</code>. The block shows <code>58,800</code>.</li>
+  <li><strong>Wire variable cost.</strong> Add another <code>Compute</code>: <code>cost per unit</code> x <code>volume</code>, <code>Operation</code> = <code>Multiply</code>, <code>Title</code> = <code>variable cost</code>. It shows <code>21,600</code>.</li>
+  <li><strong>Wire total cost.</strong> Add a <code>Compute</code> block with <code>Title</code> <code>total cost</code>, <code>Operation</code> = <code>Add</code>, wired from <code>variable cost</code> and <code>fixed costs</code>. It shows <code>31,100</code>. Add takes as many inputs as you like &mdash; press <code>+ add input</code> on the block and a third cost (fees, shipping, royalties) can fold straight into the total instead of chaining another Add block.</li>
+  <li><strong>Wire profit, then mark it as the outcome.</strong> Add a <code>Compute</code> block with <code>Title</code> <code>profit</code>, <code>Operation</code> = <code>Subtract</code>, with <code>revenue</code> as <code>a</code> and <code>total cost</code> as <code>b</code>. It shows <code>27,700</code>. Then press <em>Mark as a result</em> in Block settings: the card turns green and takes the <code>RESULT</code> label, and the number appears in the <em>Results and what moves them</em> panel. Set <code>Display unit</code> to <code>$</code> and the outcome reads <code>$27,700</code>. Marking never changes the wiring &mdash; <code>profit</code> still feeds anything wired from it &mdash; and you can mark as many Compute blocks as you need, each its own outcome.</li>
   <li><strong>Check the numbers.</strong> Every block should now agree:
     <div class="tbl-wrap">
       <table>
@@ -380,23 +380,24 @@
           <tr><td>variable cost</td><td class="num">18 x 1,200</td><td class="num">21,600</td></tr>
           <tr><td>total cost</td><td class="num">21,600 + 9,500</td><td class="num">31,100</td></tr>
           <tr><td>profit</td><td class="num">58,800 - 31,100</td><td class="num">27,700</td></tr>
-          <tr><td>Monthly profit</td><td class="num">Result, display unit $</td><td class="num">$27,700</td></tr>
+          <tr><td>profit, marked</td><td class="num">Subtract, marked as a result, display unit $</td><td class="num">$27,700</td></tr>
         </tbody>
       </table>
     </div>
   </li>
-  <li><strong>Optional: do it in one Formula instead.</strong> A single <code>Formula</code> block can replace the four Operation blocks. Add the block, then use <code>Add input</code> in Block settings to create four named inputs on the <code>Inputs</code> list &mdash; <code>price</code>, <code>volume</code>, <code>cost</code>, <code>fixed</code> &mdash; wire the Value inputs to them, and type the <code>Expression</code> <code>price * volume - (cost * volume + fixed)</code>. Wire the Formula straight into the Result. Same answer (<code>$27,700</code>), fewer blocks; the trade-off is that intermediate totals like total cost are no longer visible as their own blocks.</li>
-  <li><strong>Read the sensitivity panel.</strong> Because <code>price</code> and <code>volume</code> have a Min and a Max, the engine measures their full min-to-max swing on the result; the inputs without a range are measured at <code>+1%</code>. Expect <code>price</code> and <code>volume</code> at the top &mdash; a swing of 39 to 59 on price alone moves profit by roughly 24,000. If you can only improve one estimate this week, improve the price estimate.</li>
-  <li><strong>Presentation and export.</strong> Set a <code>Display unit</code> on the Result to present the number as you want it. Then use <code>Export SVG</code> for a crisp diagram for a deck or a document, <code>Export PNG</code> for a quick share, and <code>Export JSON</code> to carry the model itself to another device.</li>
+  <li><strong>Optional: do it in one Compute block instead.</strong> The same block has a second face: a typed expression over named inputs. Add the block and choose <em>Typed expression</em> under <em>How should it compute?</em> &mdash; or flip any Compute block between its two faces with <code>How it computes</code> in Block settings, where wires survive wherever the ports do. Type the <code>Expression</code> <code>price * volume - (cost * volume + fixed)</code>: the names it uses become the block's <code>Inputs</code> &mdash; <code>price</code>, <code>volume</code>, <code>cost</code>, <code>fixed</code> &mdash; which you can rename or extend with <code>Add input</code>. Wire the four Value inputs into those ports and press <em>Mark as a result</em>. Same answer (<code>$27,700</code>), fewer blocks; the trade-off is that intermediate totals like total cost are no longer visible as their own blocks.</li>
+  <li><strong>Read the sensitivity panel.</strong> Each marked outcome gets its own ranking. Because <code>price</code> and <code>volume</code> have a Min and a Max, the engine measures their full min-to-max swing on the outcome; the inputs without a range are measured at <code>+1%</code>. Expect <code>price</code> and <code>volume</code> at the top &mdash; a swing of 39 to 59 on price alone moves profit by roughly 24,000. If you can only improve one estimate this week, improve the price estimate.</li>
+  <li><strong>Presentation and export.</strong> Set a <code>Display unit</code> on the marked outcome to present the number as you want it. Then use <code>Export SVG</code> for a crisp diagram for a deck or a document, <code>Export PNG</code> for a quick share, and <code>Export JSON</code> to carry the model itself to another device.</li>
 </ol>
 
 <h2>Tips and troubleshooting</h2>
 <ul>
   <li><strong>Unconnected ports show an error naming the port.</strong> The message points at exactly which input is still empty &mdash; wire it and the error clears.</li>
-  <li><strong>Loops are refused.</strong> If a wire is rejected, the connection would make values flow in a circle. A model is one-way, from inputs to result.</li>
+  <li><strong>Loops are refused.</strong> If a wire is rejected, the connection would make values flow in a circle. A model is one-way, from inputs onwards.</li>
   <li><strong>Unit mismatch errors usually mean a labelling mistake.</strong> Most often a total was labelled as a per-unit rate (or the reverse) &mdash; for example <code>total cost</code> tagged as <code>$/unit</code>. Fix the unit on the offending block.</li>
-  <li><strong>New here, or just exploring?</strong> The <strong>Blocks palette</strong> has ready-made examples &mdash; <code>Monthly profit</code>, <code>Line efficiency</code> and <code>Design score</code>. Load one, change the numbers, rewire it; nothing is locked.</li>
-  <li><strong>Formulas resolve names from their own Inputs list.</strong> If an expression cannot find a name, that name is missing from the block's <code>Inputs</code>; add it with <code>Add input</code> and wire a value into it.</li>
+  <li><strong>Not seeing a result?</strong> The <em>Results and what moves them</em> panel only lists marked outcomes. Select a Compute block and press <em>Mark as a result</em> in Block settings &mdash; or check the <em>Model check</em> panel, which says so plainly.</li>
+  <li><strong>Typed expressions resolve names from their own Inputs list.</strong> If an expression cannot find a name, that name is missing from the block's <code>Inputs</code>; add it with <code>Add input</code> and wire a value into it.</li>
+  <li><strong>Model files are version 2.</strong> Exports and browser saves made by older versions of the tool are not migrated &mdash; the app starts with a fresh model and says so. Export from the old version first if you still need it.</li>
   <li><strong>The model autosaves in your browser</strong> (localStorage), so closing the tab does not lose your work. <code>Export JSON</code> and <code>Import JSON</code> move a model between devices. <code>Clear data</code> in the Settings menu at the top right deletes everything this site stored in your browser.</li>
   <li><strong>Wiring does not need pixel precision.</strong> A wire snaps to the nearest legal port and a link dropped on a card uses its first free input &mdash; if a connection is refused, the message says why (a loop, a second output, or a unit clash).</li>
   <li><strong>Big model? Use <code>Arrange</code>, <code>Compact</code> and <code>Focus</code>.</strong> Arrange sorts the blocks into flow order, Compact turns them into a one-screen overview, and Focus opens one block with its own inputs. All three sit in the <em>View</em> menu at the bottom left of the canvas &mdash; and leave <em>Auto-fit camera</em> off to keep the view still while you move in and out of Focus.</li>
@@ -406,7 +407,7 @@
 <hr class="divider">
 
 <footer>
-  <p>That is the whole method: assemble one equation from small blocks, wire them together, check the units, and let the sensitivity panel tell you which input deserves your attention. Start with the model you actually need to decide on today.</p>
+  <p>That is the whole method: assemble one equation from small blocks, wire them together, check the units, mark the outcome you care about, and let the sensitivity panel tell you which input deserves your attention. Start with the model you actually need to decide on today.</p>
   <p class="btn-row"><a class="btn" href="index.html">Open the tool</a></p>
 </footer>
 

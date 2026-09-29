@@ -1,5 +1,6 @@
 // engine.js — model evaluation for the Universal Framework Approach.
-// A model is a DAG of blocks joined by wires. Values flow from inputs to the result.
+// A model is a DAG of blocks joined by wires. Values flow from inputs onwards;
+// any Compute block may be marked as an outcome (a result) of the model.
 
 import { parseUnit, combineMul, combineDiv, powUnit, sameDims, isRatio, dimensionless, toBase, fromBase, formatValue, describeUnit, formatNumber } from './units.js';
 import { parseExpr, collectNames, roundTo, FUNCTIONS } from './expr.js';
@@ -16,7 +17,12 @@ export const OPS = {
   pct: { label: 'Percent of', symbol: '%', ports: ['a', 'b'] }
 };
 
-export const BLOCK_TYPES = ['input', 'op', 'formula', 'result'];
+// A Compute block is the one combination block: it either applies a ready
+// operation (mode 'op') or evaluates a typed expression over named inputs
+// (mode 'expr') — whichever the user chose. Any Compute block may be marked
+// as an outcome (block.outcome), which is presentation and analysis metadata:
+// the block still computes and still feeds wires onward.
+export const BLOCK_TYPES = ['input', 'compute'];
 
 // Add, Multiply, Minimum and Maximum fold over any number of inputs; the other
 // operations keep their two fixed ports.
@@ -43,7 +49,7 @@ export function newId(prefix) {
 
 export function defaultModel(name) {
   return {
-    version: 1,
+    version: 2,
     name: name || 'Untitled model',
     blocks: [],
     wires: []
@@ -59,29 +65,61 @@ export function makeBlock(type, x, y) {
     base.min = null;
     base.likely = null;
     base.max = null;
-  } else if (type === 'op') {
+  } else if (type === 'compute') {
+    base.mode = 'op';
     base.op = 'add';
     base.title = 'Add';
     base.terms = ['a', 'b'];
-  } else if (type === 'formula') {
-    base.title = 'Formula';
     base.expr = '';
-    base.inputs = [{ id: newId('p'), name: 'x' }];
-  } else if (type === 'result') {
-    base.title = 'Result';
+    base.inputs = [{ id: 'a', name: 'a' }, { id: 'b', name: 'b' }];
+    base.outcome = false;
+    base.displayUnit = '';
   }
   return base;
 }
 
+// Switching a Compute block between its two faces keeps the port ids it can,
+// so wires survive; the ids of dropped ports come back so the caller can prune
+// the wires that fed them.
+export function switchComputeMode(block, mode) {
+  const dropped = [];
+  if (mode === block.mode) return dropped;
+  if (mode === 'expr') {
+    const terms = opTerms(block);
+    const inputs = [];
+    for (let i = 0; i < terms.length; i++) {
+      const known = (block.inputs || []).filter(function (p) { return p.id === terms[i]; })[0];
+      inputs.push({ id: terms[i], name: known ? known.name : termLabel(i) });
+    }
+    block.inputs = inputs;
+  } else {
+    const inputs = block.inputs || [];
+    const terms = [];
+    for (const p of inputs) terms.push(p.id);
+    if (!terms.length) terms.push('a', 'b');
+    if (terms.length === 1) terms.push('b');
+    block.terms = terms;
+    if (!OPS[block.op]) block.op = 'add';
+    if (!isVariadicOp(block.op)) {
+      while (terms.length > 2) dropped.push(terms.pop());
+    }
+  }
+  block.mode = mode;
+  return dropped;
+}
+
 export function blockPorts(block) {
   if (block.type === 'input') return [];
-  if (block.type === 'result') return [{ id: 'in', label: 'in' }];
-  if (block.type === 'op') return opTerms(block).map(function (id, i) { return { id: id, label: termLabel(i) }; });
+  if (block.type === 'compute' && block.mode !== 'expr') {
+    return opTerms(block).map(function (id, i) { return { id: id, label: termLabel(i) }; });
+  }
   return (block.inputs || []).map(function (p) { return { id: p.id, label: p.name }; });
 }
 
+// Every block carries a value onwards — an outcome is still a step in the
+// equation and may feed further blocks.
 export function blockHasOutput(block) {
-  return block.type !== 'result';
+  return true;
 }
 
 function wireInto(model, blockId, portId) {
@@ -223,7 +261,7 @@ export function evaluateModel(model, overrides) {
     }
   }
   if (order.length !== model.blocks.length) {
-    errors.push('The wiring forms a loop; a model must flow one way, from inputs to the result.');
+    errors.push('The wiring forms a loop; a model must flow one way, from inputs onwards.');
   }
 
   const evalBlock = function (id) {
@@ -260,18 +298,7 @@ export function evaluateModel(model, overrides) {
       const unit = parseUnitSafe(block.unit);
       return { v: value * unit.s, u: unit, source: block };
     }
-    if (block.type === 'result') {
-      const up = portValue(block, 'in');
-      const override = (block.displayUnit || '').trim();
-      if (override) {
-        const target = parseUnitSafe(override);
-        if (sameDims(up.u, target)) {
-          return { v: up.v, u: target, source: block };
-        }
-      }
-      return { v: up.v, u: up.u, source: block };
-    }
-    if (block.type === 'op') {
+    if (block.type === 'compute' && block.mode !== 'expr') {
       const op = block.op || 'add';
       const terms = opTerms(block);
       if (isVariadicOp(op)) {
@@ -336,9 +363,9 @@ export function evaluateModel(model, overrides) {
       }
       throw new Error('Unknown operation "' + op + '"');
     }
-    if (block.type === 'formula') {
+    if (block.type === 'compute') {
       if (!block.expr || !String(block.expr).trim()) {
-        throw new Error('Formula "' + blockTitle(block) + '" needs an expression');
+        throw new Error('Compute "' + blockTitle(block) + '" is in expression mode and needs an expression');
       }
       const env = {};
       for (const p of block.inputs || []) {
@@ -353,7 +380,7 @@ export function evaluateModel(model, overrides) {
       for (const n of referenced) {
         if (!env[n]) {
           const known = (block.inputs || []).map(function (p) { return p.name; }).join(', ');
-          throw new Error('Formula "' + blockTitle(block) + '" uses "' + n + '" which is not an input of this block (inputs: ' + (known || 'none') + ')');
+          throw new Error('Compute "' + blockTitle(block) + '" uses "' + n + '" which is not an input of this block (inputs: ' + (known || 'none') + ')');
         }
       }
       return evalNode(ast, env);
@@ -372,15 +399,17 @@ export function evaluateModel(model, overrides) {
     if (out.error) errors.push(out.error);
   }
 
-  // Every Result block is an outcome in its own right; a model may have several.
-  // `result` stays as the first one for callers that only need a single outcome.
-  const results = model.blocks.filter(function (b) { return b.type === 'result'; }).map(function (rb) {
+  // Every marked Compute block is an outcome in its own right; a model may
+  // have several. The display unit is presentation only — wires keep carrying
+  // the block's own unit. `result` stays as the first outcome for callers
+  // that only need one.
+  const results = model.blocks.filter(isOutcome).map(function (rb) {
     const r = state[rb.id];
     const entry = { id: rb.id, title: blockTitle(rb) };
     if (r && !r.error) {
       entry.value = r.v;
       entry.unit = r.u;
-      entry.display = formatValue(r.v, r.u);
+      entry.display = present(rb, r);
     } else {
       entry.error = r ? r.error : 'Block not found';
     }
@@ -401,7 +430,7 @@ export function evaluateModel(model, overrides) {
       error: out.error || null,
       value: out.v === undefined ? null : out.v,
       unit: out.u || null,
-      display: out.error ? 'error' : (out.v === undefined ? '—' : formatValue(out.v, out.u))
+      display: out.error ? 'error' : (out.v === undefined ? '—' : present(b, out))
     };
   }
 
@@ -412,6 +441,22 @@ export function evaluateModel(model, overrides) {
     results: results,
     errors: dedupe(errors)
   };
+}
+
+// Is this block one of the model's outcomes?
+export function isOutcome(block) {
+  return block.type === 'compute' && !!block.outcome;
+}
+
+// Show an outcome the way its display unit asks, when that unit fits; the
+// underlying value and unit are untouched.
+function present(block, out) {
+  const override = isOutcome(block) ? (block.displayUnit || '').trim() : '';
+  if (override && out.u) {
+    const target = parseUnitSafe(override);
+    if (sameDims(out.u, target)) return formatValue(out.v, target);
+  }
+  return formatValue(out.v, out.u);
 }
 
 function dedupe(list) {
@@ -438,17 +483,17 @@ function parseExprSafe(text) {
 
 export function blockTitle(block) {
   if (block.type === 'input') return block.name || 'Input';
-  if (block.type === 'formula') return block.title || 'Formula';
-  if (block.type === 'op') return block.title || (OPS[block.op] ? OPS[block.op].label : 'Operation');
-  return block.title || 'Result';
+  if (block.title) return block.title;
+  if (block.mode === 'expr') return 'Compute';
+  return (OPS[block.op] && OPS[block.op].label) || 'Compute';
 }
 
 export function portLabel(block, portId) {
-  if (block.type === 'formula') {
-    const p = (block.inputs || []).filter(function (x) { return x.id === portId; })[0];
-    return p ? p.name : portId;
-  }
-  if (block.type === 'op') {
+  if (block.type === 'compute') {
+    if (block.mode === 'expr') {
+      const p = (block.inputs || []).filter(function (x) { return x.id === portId; })[0];
+      return p ? p.name : portId;
+    }
     const index = opTerms(block).indexOf(portId);
     return index >= 0 ? termLabel(index) : portId;
   }
@@ -460,8 +505,8 @@ export function portLabel(block, portId) {
 // ---------------------------------------------------------------------------
 
 export function sensitivity(model, resultRef) {
-  // resultRef: the id of the Result block to measure against (or an entry with
-  // an id). Falls back to the first Result block when it names nothing.
+  // resultRef: the id of the outcome block to measure against (or an entry with
+  // an id). Falls back to the first outcome when it names nothing.
   const resultId = typeof resultRef === 'string' ? resultRef : (resultRef && resultRef.id) || null;
   const pick = function (evalResult) {
     if (resultId && evalResult.results) {
@@ -533,19 +578,19 @@ function set(obj, key, value) {
 
 export function validateModel(model, values) {
   const issues = [];
-  const resultBlocks = model.blocks.filter(function (b) { return b.type === 'result'; });
-  if (resultBlocks.length === 0) issues.push('Add a Result block to see an outcome.');
+  const outcomeBlocks = model.blocks.filter(isOutcome);
+  if (outcomeBlocks.length === 0) issues.push('Mark a Compute block as an outcome to see a result.');
   if (values) {
     // The evaluator quietly ignores a display unit of the wrong kind of
     // quantity — say so instead of leaving the user wondering.
-    for (const b of resultBlocks) {
+    for (const b of outcomeBlocks) {
       const override = (b.displayUnit || '').trim();
       const st = values[b.id];
       if (!override || !st || st.error || !st.unit) continue;
       const target = parseUnitSafe(override);
       if (!sameDims(st.unit, target)) {
         const natural = (st.unit && st.unit.l) ? '"' + st.unit.l + '"' : 'a plain number';
-        issues.push('Result "' + blockTitle(b) + '": display unit "' + override + '" is a different kind of quantity than its value (' + natural + ') — showing ' + natural + ' instead.');
+        issues.push('Outcome "' + blockTitle(b) + '": display unit "' + override + '" is a different kind of quantity than its value (' + natural + ') — showing ' + natural + ' instead.');
       }
     }
   }
@@ -553,7 +598,7 @@ export function validateModel(model, values) {
   for (const b of model.blocks) {
     if (b.type !== 'input') continue;
     const key = (b.name || '').trim().toLowerCase();
-    if (key && seenName[key]) issues.push('Two inputs share the name "' + b.name + '" — formulas resolve by name.');
+    if (key && seenName[key]) issues.push('Two inputs share the name "' + b.name + '" — expressions resolve by name.');
     seenName[key] = true;
     const hasMin = b.min !== null && b.min !== undefined && b.min !== '';
     const hasMax = b.max !== null && b.max !== undefined && b.max !== '';
@@ -562,9 +607,9 @@ export function validateModel(model, values) {
     }
   }
   for (const b of model.blocks) {
-    if (b.type !== 'formula') continue;
+    if (b.type !== 'compute' || b.mode !== 'expr') continue;
     if (!b.expr || !String(b.expr).trim()) {
-      issues.push('Formula "' + blockTitle(b) + '" needs an expression.');
+      issues.push('Compute "' + blockTitle(b) + '" is in expression mode and needs an expression.');
       continue;
     }
     try {
@@ -573,11 +618,11 @@ export function validateModel(model, values) {
       const defined = (b.inputs || []).map(function (p) { return p.name; });
       for (const n of names) {
         if (defined.indexOf(n) < 0) {
-          issues.push('Formula "' + blockTitle(b) + '" refers to "' + n + '" which is not one of its inputs.');
+          issues.push('Compute "' + blockTitle(b) + '" refers to "' + n + '" which is not one of its inputs.');
         }
       }
     } catch (err) {
-      issues.push('Formula "' + blockTitle(b) + '": ' + err.message);
+      issues.push('Compute "' + blockTitle(b) + '": ' + err.message);
     }
   }
   return issues;

@@ -186,7 +186,7 @@ export function evalNumber(ast, env) {
   if (ast.t === 'num') return ast.v;
   if (ast.t === 'name') {
     const v = env[ast.n];
-    if (v === undefined) throw new Error('Unknown input "' + ast.n + '" in formula');
+    if (v === undefined) throw new Error('Unknown input "' + ast.n + '" in expression');
     return v;
   }
   if (ast.t === 'neg') return -evalNumber(ast.a, env);

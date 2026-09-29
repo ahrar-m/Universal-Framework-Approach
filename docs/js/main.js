@@ -1,11 +1,14 @@
 // main.js — application controller: palette, inspector, sensitivity, persistence.
-import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, blockHasOutput, newId, isVariadicOp, opTerms, termLabel } from './engine.js';
+import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, blockHasOutput, newId, isVariadicOp, opTerms, termLabel, switchComputeMode, isOutcome } from './engine.js';
 import { formatValue, formatNumber } from './units.js';
 import { createCanvas, blockRect, computeLayout, portPoint, outPoint } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
-import { EXAMPLES } from './examples.js';
+import { parseExpr, collectNames } from './expr.js';
 
-const STORE_KEY = 'ufa.model.v1';
+// The block model changed (one Compute block, outcomes marked on it), and old
+// models are deliberately not migrated: v2 is the only source of truth.
+const STORE_KEY = 'ufa.model.v2';
+const OLD_STORE_KEY = 'ufa.model.v1';
 
 const els = {
   svg: document.getElementById('canvas'),
@@ -28,6 +31,15 @@ const els = {
 };
 
 let model = loadModel() || starterModel();
+try {
+  if (!localStorage.getItem(STORE_KEY) && localStorage.getItem(OLD_STORE_KEY)) {
+    setTimeout(function () {
+      toast('A model saved by an earlier version was found. Models are not migrated, so a fresh model is open. Export from the old version first if you still need it.');
+    }, 800);
+  }
+} catch (err) {
+  // storage may be unavailable
+}
 let values = {};
 let result = null;
 let saveTimer = null;
@@ -44,7 +56,7 @@ function loadModel() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.blocks)) return null;
+    if (!parsed || parsed.version !== 2 || !Array.isArray(parsed.blocks)) return null;
     return parsed;
   } catch (err) {
     return null;
@@ -102,7 +114,7 @@ const canvasView = createCanvas({
   deleteBlock: function (id) { deleteBlock(id); },
   addInput: function (id) {
     const block = findBlock(id);
-    if (block && block.type === 'op' && isVariadicOp(block.op)) addOpInput(block);
+    if (block && block.type === 'compute' && block.mode !== 'expr' && isVariadicOp(block.op)) addOpInput(block);
   },
   deleteWire: function (id) {
     model.wires = model.wires.filter(function (w) { return w.id !== id; });
@@ -118,6 +130,9 @@ const canvasView = createCanvas({
 });
 
 function connectPorts(fromId, fromPort, fromDir, toId, toPort, toDir) {
+  // a wire can outlive the tap that started it (the source may have been
+  // deleted meanwhile) — never wire blocks that are no longer there
+  if (!findBlock(fromId) || !findBlock(toId)) return;
   if (fromId === toId) {
     toast('A block cannot be wired to itself.');
     return;
@@ -179,7 +194,7 @@ function connectAuto(fromId, fromPort, fromDir, toId) {
   if (!target) return;
   if (fromDir === 'out') {
     let portId = autoTargetPort('out', toId);
-    if (!portId && target.type === 'op' && isVariadicOp(target.op)) {
+    if (!portId && target.type === 'compute' && target.mode !== 'expr' && isVariadicOp(target.op)) {
       // endless inputs: grow one more term and land the wire on it
       const terms = opTerms(target).slice();
       terms.push(freeTermId(terms));
@@ -195,7 +210,7 @@ function connectAuto(fromId, fromPort, fromDir, toId) {
   }
   const outPort = autoTargetPort('in', toId);
   if (!outPort) {
-    toast('The Result block has no output port.');
+    toast('That block cannot take this wire.');
     return;
   }
   connectPorts(target.id, 'out', 'out', fromId, fromPort, 'in');
@@ -398,6 +413,8 @@ function animateToTargets(targets, done) {
 }
 
 function deleteBlock(id) {
+  // drop any half-made wire too, so the next tap cannot resurrect it
+  canvasView.clearSelection();
   model.blocks = model.blocks.filter(function (b) { return b.id !== id; });
   model.wires = model.wires.filter(function (w) { return w.from !== id && w.to !== id; });
   if (focusId === id) {
@@ -428,22 +445,6 @@ function findFreeSpot(x, y) {
   return { x: Math.round(x), y: Math.round(y) };
 }
 
-function loadExample(id) {
-  const ex = EXAMPLES.find(function (e) { return e.id === id; });
-  if (!ex) return;
-  if (model.blocks.length && !confirm('Load the "' + ex.name + '" example? It replaces the model on screen. Export yours as JSON first if you want to keep it.')) return;
-  model = JSON.parse(JSON.stringify(ex.model));
-  model.name = ex.name;
-  els.modelName.value = model.name;
-  canvasView.clearSelection();
-  renderSettings(null);
-  saveSoon();
-  recompute();
-  canvasView.fit();
-  closeSheets();
-  toast('Loaded the ' + ex.name + ' example.');
-}
-
 function clearSiteData() {
   if (!confirm('Clear the data this site saved in your browser? The model on screen is removed from this device. Anything you exported as JSON is unaffected.')) return;
   if (saveTimer) {
@@ -464,7 +465,7 @@ function clearSiteData() {
   toast('Saved data cleared.');
 }
 
-const BLOCK_LABELS = { input: 'Value input', op: 'Operation', formula: 'Formula', result: 'Result' };
+const BLOCK_LABELS = { input: 'Value input', compute: 'Compute' };
 
 function addBlock(type) {
   openCreateDialog(type, function (fields) {
@@ -529,19 +530,21 @@ function dialogFieldsHtml(type) {
       field('Value', '<input type="number" step="any" data-dlg="value" placeholder="0">') +
       '</div><datalist id="dialogUnits">' + unitList + '</datalist>';
     html += '<div class="field-hint">Units are checked everywhere and labels cancel. An unknown word like <code>tickets</code> becomes its own unit.</div>';
-  } else if (type === 'op') {
+  } else if (type === 'compute') {
     html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. Gross margin" spellcheck="false">');
+    html += field('How should it compute?', '<select data-dlg="mode">' +
+      '<option value="op">Ready operation</option>' +
+      '<option value="expr">Typed expression</option></select>');
     const options = Object.keys(OPS).map(function (key) {
       return '<option value="' + key + '">' + OPS[key].label + '</option>';
     }).join('');
-    html += field('Operation', '<select data-dlg="op">' + options + '</select>');
-    html += '<div class="field-hint">Add, Multiply, Min and Max take any number of inputs; the rest take two.</div>';
-  } else if (type === 'formula') {
-    html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. Net margin" spellcheck="false">');
-    html += '<div class="field-hint">Inputs and the expression are typed in Block settings once the card is on the canvas.</div>';
-  } else {
-    html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. Monthly profit" spellcheck="false">');
-    html += '<div class="field-hint">An optional display unit can be set in Block settings.</div>';
+    html += '<div data-dlgshow="op">' +
+      field('Operation', '<select data-dlg="op">' + options + '</select>') +
+      '<div class="field-hint">Add, Multiply, Min and Max take any number of inputs; the rest take two.</div></div>';
+    html += '<div data-dlgshow="expr" hidden>' +
+      field('Expression', '<input type="text" data-dlg="expr" placeholder="price * volume - cost" spellcheck="false">') +
+      '<div class="field-hint">The names in the expression become this block\u2019s inputs. Edit them in Block settings. Functions: <code>min</code> <code>max</code> <code>round</code> <code>abs</code> <code>sqrt</code> <code>pow</code> and more.</div></div>';
+    html += '<div class="field-hint">A Compute block can be marked as one of the model\u2019s results in Block settings.</div>';
   }
   return html;
 }
@@ -556,6 +559,18 @@ function openCreateDialog(type, onConfirm) {
   title.textContent = 'New ' + (BLOCK_LABELS[type] || 'block');
   body.innerHTML = dialogFieldsHtml(type);
   dialogState = { type: type, onConfirm: onConfirm };
+  const modeSel = body.querySelector('[data-dlg="mode"]');
+  if (modeSel) {
+    modeSel.addEventListener('change', function () {
+      const exprMode = modeSel.value === 'expr';
+      const opBox = body.querySelector('[data-dlgshow="op"]');
+      const exprBox = body.querySelector('[data-dlgshow="expr"]');
+      if (opBox) opBox.hidden = exprMode;
+      if (exprBox) exprBox.hidden = !exprMode;
+      const next = body.querySelector(exprMode ? '[data-dlg="expr"]' : '[data-dlg="op"]');
+      if (next && next.focus) next.focus();
+    });
+  }
   scrim.hidden = false;
   const first = body.querySelector('input, select');
   if (first && first.focus) first.focus();
@@ -575,7 +590,7 @@ function confirmCreateDialog() {
     const el = body ? body.querySelector('[data-dlg="' + key + '"]') : null;
     return el ? String(el.value).trim() : '';
   };
-  const fields = { name: get('name'), unit: get('unit'), value: get('value'), op: get('op') };
+  const fields = { name: get('name'), unit: get('unit'), value: get('value'), op: get('op'), mode: get('mode'), expr: get('expr') };
   closeCreateDialog();
   if (state.onConfirm) state.onConfirm(fields);
 }
@@ -589,10 +604,29 @@ function applyDialogFields(block, type, fields) {
     block.unit = fields.unit;
     block.value = fields.value === '' ? 0 : Number(fields.value);
   }
-  if (type === 'op') {
-    if (fields.op && OPS[fields.op]) block.op = fields.op;
-    if (!fields.name) block.title = (OPS[block.op] || OPS.add).label;
+  if (type === 'compute') {
+    block.mode = fields.mode === 'expr' ? 'expr' : 'op';
+    if (block.mode === 'expr') {
+      block.expr = fields.expr || '';
+      block.inputs = exprInputs(block.expr);
+    } else {
+      if (fields.op && OPS[fields.op]) block.op = fields.op;
+      if (!isVariadicOp(block.op)) block.terms = ['a', 'b'];
+      if (!fields.name) block.title = (OPS[block.op] || OPS.add).label;
+    }
   }
+}
+
+// The names a typed expression uses become the block's input ports, so the
+// card that lands on the canvas is already wired to what the expression wants.
+function exprInputs(expr) {
+  try {
+    const names = collectNames(parseExpr(expr || ''));
+    if (names.length) return names.map(function (n) { return { id: n, name: n }; });
+  } catch (err) {
+    // unfinished expressions can be completed in Block settings
+  }
+  return [{ id: 'a', name: 'a' }, { id: 'b', name: 'b' }];
 }
 
 // ---------------------------------------------------------------- port menu
@@ -606,8 +640,8 @@ function openPortMenu(hit, cx, cy) {
   if (!menu || !block) return;
   closePopouts();
   const addable = hit.dir === 'in'
-    ? ['input', 'op', 'formula']
-    : ['op', 'formula', 'result'];
+    ? ['input', 'compute']
+    : ['compute'];
   const parts = [];
   for (const type of addable) {
     parts.push('<button type="button" class="menu-item" data-portadd="' + type + '">Add ' + BLOCK_LABELS[type] + ' here</button>');
@@ -774,9 +808,6 @@ function renderIssues(evalResult) {
   for (const err of evalResult.errors) {
     if (issues.indexOf(err) < 0) issues.push(err);
   }
-  if (!model.blocks.some(function (b) { return b.type === 'result'; })) {
-    // already covered by validateModel
-  }
   if (!issues.length) {
     els.issuesBody.innerHTML = '<div class="issue ok">Everything checks out. Units are consistent and every required port is connected.</div>';
     return;
@@ -790,11 +821,11 @@ function renderSensitivity(evalResult) {
   const parts = [];
   const results = evalResult.results || [];
   if (!results.length) {
-    parts.push('<div class="result-readout"><div class="rr-label">Result</div><div class="rr-value err">Wire something into a Result block</div></div>');
+    parts.push('<p class="panel-sub">Mark a Compute block as an outcome to see a result.</p>');
     els.sensitivityBody.innerHTML = parts.join('');
     return;
   }
-  // one readout per Result block: a model may carry several outcomes
+  // one readout per marked outcome: a model may carry several
   for (const r of results) {
     parts.push('<div class="result-readout"><div class="rr-label">' + escapeHtml(r.title) + '</div>' +
       '<div class="rr-value' + (r.error ? ' err' : '') + '">' + escapeHtml(r.error ? r.error : r.display) + '</div></div>');
@@ -844,7 +875,7 @@ function usedUnits() {
   };
   for (const b of model.blocks) {
     if (b.type === 'input') add(b.unit);
-    else if (b.type === 'result') add(b.displayUnit);
+    else if (isOutcome(b)) add(b.displayUnit);
   }
   return list;
 }
@@ -888,42 +919,50 @@ function settingsHtml(block) {
       field('Max', '<input type="number" step="any" data-field="max" value="' + escapeHtml(block.max === null || block.max === undefined ? '' : block.max) + '" placeholder="optional">') +
       '</div>';
     html += '<div class="field-hint">Give a min and a max to measure this input across its real range in the sensitivity ranking.</div>';
-  } else if (block.type === 'op') {
+  } else if (block.type === 'compute') {
     html += field('Title', '<input type="text" data-field="title" value="' + escapeHtml(block.title || '') + '" spellcheck="false">');
-    const options = Object.keys(OPS).map(function (key) {
-      return '<option value="' + key + '"' + (block.op === key ? ' selected' : '') + '>' + OPS[key].label + '</option>';
-    }).join('');
-    html += field('Operation', '<select data-field="op">' + options + '</select>');
-    if (isVariadicOp(block.op)) {
-      const terms = opTerms(block);
+    html += field('How it computes', '<select data-field="mode">' +
+      '<option value="op"' + (block.mode !== 'expr' ? ' selected' : '') + '>Ready operation</option>' +
+      '<option value="expr"' + (block.mode === 'expr' ? ' selected' : '') + '>Typed expression</option></select>');
+    if (block.mode === 'expr') {
       html += '<div class="field"><label>Inputs</label>';
-      terms.forEach(function (id, index) {
-        html += '<div class="formula-input-row"><span class="port-tag">' + escapeHtml(termLabel(index)) + '</span>' +
-          (terms.length > 1 ? '<button type="button" class="icon-btn" data-removeterm="' + index + '" title="Remove input">×</button>' : '') +
-          '</div>';
+      const inputs = block.inputs || [];
+      inputs.forEach(function (p, index) {
+        html += '<div class="formula-input-row"><input type="text" data-portname="' + index + '" value="' + escapeHtml(p.name) + '" spellcheck="false" aria-label="Input name">' +
+          '<button type="button" class="icon-btn" data-removeport="' + index + '" title="Remove input">×</button></div>';
       });
-      html += '<button type="button" class="btn" data-addterm="1">Add input</button></div>';
-      html += '<div class="field-hint">' + OPS[block.op].label + ' takes as many inputs as you like &mdash; use <code>Add input</code> here or the <code>+ add input</code> row on the block. Empty ports are ignored, and one connected input passes straight through. Every input must be the same kind of quantity.</div>';
+      html += '<button type="button" class="btn" data-addport="1">Add input</button></div>';
+      html += field('Expression', '<textarea data-field="expr" spellcheck="false" placeholder="price * volume * (1 - churn)">' + escapeHtml(block.expr || '') + '</textarea>');
+      const names = (block.inputs || []).map(function (p) { return '<code>' + escapeHtml(p.name) + '</code>'; }).join(' ');
+      html += '<div class="field-hint">Use the input names in the expression: ' + (names || 'add an input first') + '. Functions: <code>min</code> <code>max</code> <code>round</code> <code>floor</code> <code>ceil</code> <code>abs</code> <code>sqrt</code> <code>pow</code> <code>exp</code> <code>ln</code> <code>log</code> <code>sign</code>.</div>';
     } else {
-      html += '<div class="field-hint">This operation takes two inputs: the left port is <code>a</code>, the right port is <code>b</code>. Add, subtract, min and max need the same kind of quantity; multiply and divide combine units.</div>';
+      const options = Object.keys(OPS).map(function (key) {
+        return '<option value="' + key + '"' + (block.op === key ? ' selected' : '') + '>' + OPS[key].label + '</option>';
+      }).join('');
+      html += field('Operation', '<select data-field="op">' + options + '</select>');
+      if (isVariadicOp(block.op)) {
+        const terms = opTerms(block);
+        html += '<div class="field"><label>Inputs</label>';
+        terms.forEach(function (id, index) {
+          html += '<div class="formula-input-row"><span class="port-tag">' + escapeHtml(termLabel(index)) + '</span>' +
+            (terms.length > 1 ? '<button type="button" class="icon-btn" data-removeterm="' + index + '" title="Remove input">×</button>' : '') +
+            '</div>';
+        });
+        html += '<button type="button" class="btn" data-addterm="1">Add input</button></div>';
+        html += '<div class="field-hint">' + OPS[block.op].label + ' takes as many inputs as you like &mdash; use <code>Add input</code> here or the <code>+ add input</code> row on the block. Empty ports are ignored, and one connected input passes straight through. Every input must be the same kind of quantity.</div>';
+      } else {
+        html += '<div class="field-hint">This operation takes two inputs: the left port is <code>a</code>, the right port is <code>b</code>. Add, subtract, min and max need the same kind of quantity; multiply and divide combine units.</div>';
+      }
     }
-  } else if (block.type === 'formula') {
-    html += field('Title', '<input type="text" data-field="title" value="' + escapeHtml(block.title || '') + '" spellcheck="false">');
-    html += '<div class="field"><label>Inputs</label>';
-    const inputs = block.inputs || [];
-    inputs.forEach(function (p, index) {
-      html += '<div class="formula-input-row"><input type="text" data-portname="' + index + '" value="' + escapeHtml(p.name) + '" spellcheck="false" aria-label="Input name">' +
-        '<button type="button" class="icon-btn" data-removeport="' + index + '" title="Remove input">×</button></div>';
-    });
-    html += '<button type="button" class="btn" data-addport="1">Add input</button></div>';
-    html += field('Expression', '<textarea data-field="expr" spellcheck="false" placeholder="price * volume * (1 - churn)">' + escapeHtml(block.expr || '') + '</textarea>');
-    const names = (block.inputs || []).map(function (p) { return '<code>' + escapeHtml(p.name) + '</code>'; }).join(' ');
-    html += '<div class="field-hint">Use the input names in the expression: ' + (names || 'add an input first') + '. Functions: <code>min</code> <code>max</code> <code>round</code> <code>floor</code> <code>ceil</code> <code>abs</code> <code>sqrt</code> <code>pow</code> <code>exp</code> <code>ln</code> <code>log</code> <code>sign</code>.</div>';
-  } else if (block.type === 'result') {
-    html += field('Title', '<input type="text" data-field="title" value="' + escapeHtml(block.title || '') + '" spellcheck="false">');
-    html += field('Display unit', '<input type="text" list="unitList" data-field="displayUnit" value="' + escapeHtml(block.displayUnit || '') + '" placeholder="leave empty to infer" spellcheck="false"><datalist id="unitList">' + unitOptions + '</datalist>');
-    html += chipsOrHint;
-    html += '<div class="field-hint">Optional. Show the result in a unit of the same kind, for example <code>hrs</code> instead of <code>min</code>. Add as many Result blocks as you need &mdash; each is its own outcome.</div>';
+    html += '<div class="field"><label>Outcome</label>' +
+      '<button type="button" class="btn' + (block.outcome ? ' btn-primary' : '') + '" data-outcome="1">' +
+      (block.outcome ? 'Marked as a result' : 'Mark as a result') + '</button>' +
+      '<div class="field-hint">A marked Compute block is one of the model\u2019s outcomes: it appears in the results panel and drives the sensitivity ranking. Marking never changes the wiring &mdash; the block still feeds whatever is connected to it.</div></div>';
+    if (block.outcome) {
+      html += field('Display unit', '<input type="text" list="unitList" data-field="displayUnit" value="' + escapeHtml(block.displayUnit || '') + '" placeholder="leave empty to infer" spellcheck="false"><datalist id="unitList">' + unitOptions + '</datalist>');
+      html += chipsOrHint;
+      html += '<div class="field-hint">Optional. Show the outcome in a unit of the same kind, for example <code>hrs</code> instead of <code>min</code>. Mark as many Compute blocks as you need &mdash; each is its own outcome.</div>';
+    }
   }
   html += '<div class="field-row">' +
     '<button type="button" class="btn" data-focusbranch="1" title="Show only this block and everything it is built from">Focus this branch</button>' +
@@ -942,13 +981,22 @@ function bindSettings(block) {
   body.querySelectorAll('[data-chip]').forEach(function (chip) {
     chip.addEventListener('click', function () {
       const u = chip.getAttribute('data-chip');
-      if (block.type === 'result') block.displayUnit = u;
-      else block.unit = u;
+      if (block.type === 'input') block.unit = u;
+      else block.displayUnit = u;
       renderSettings(block.id);
       saveSoon();
       recompute();
     });
   });
+  const outcomeBtn = body.querySelector('[data-outcome]');
+  if (outcomeBtn) {
+    outcomeBtn.addEventListener('click', function () {
+      block.outcome = !block.outcome;
+      renderSettings(block.id);
+      saveSoon();
+      recompute();
+    });
+  }
   const addPort = body.querySelector('[data-addport]');
   if (addPort) {
     addPort.addEventListener('click', function () {
@@ -1045,6 +1093,17 @@ function onSettingsInput(e) {
   const block = findBlock(selectedId());
   if (!block) return;
   const field = el.getAttribute('data-field');
+  if (field === 'mode') {
+    const dropped = switchComputeMode(block, el.value);
+    if (dropped.length) {
+      model.wires = model.wires.filter(function (w) { return !(w.to === block.id && dropped.indexOf(w.toPort) >= 0); });
+      toast('Some wires were removed with the inputs that carried them.');
+    }
+    renderSettings(block.id);
+    saveSoon();
+    recompute();
+    return;
+  }
   if (field) {
     if (field === 'value' || field === 'min' || field === 'likely' || field === 'max') {
       const raw = el.value.trim();
@@ -1100,12 +1159,6 @@ document.querySelectorAll('.palette-item[data-type]').forEach(function (item) {
   });
 });
 
-document.querySelectorAll('.palette-item[data-example]').forEach(function (item) {
-  item.addEventListener('click', function () {
-    loadExample(item.getAttribute('data-example'));
-  });
-});
-
 document.getElementById('btnClear').addEventListener('click', clearSiteData);
 
 document.getElementById('btnNew').addEventListener('click', function () {
@@ -1153,6 +1206,10 @@ els.fileInput.addEventListener('change', function () {
   importJson(file, function (parsed) {
     if (!parsed || !Array.isArray(parsed.blocks) || !Array.isArray(parsed.wires)) {
       toast('That file does not look like a model export.');
+      return;
+    }
+    if (parsed.version !== 2) {
+      toast('That file was exported by an earlier version of the tool and cannot be imported. This version uses the new block model (Compute blocks with marked outcomes).');
       return;
     }
     model = parsed;
