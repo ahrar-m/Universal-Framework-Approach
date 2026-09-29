@@ -649,6 +649,7 @@ function disconnectPort(hit) {
 function closePopouts() {
   document.querySelectorAll('.popout-menu').forEach(function (menu) {
     menu.hidden = true;
+    menu.style.transform = '';
   });
   document.querySelectorAll('.popout > button').forEach(function (btn) {
     btn.setAttribute('aria-expanded', 'false');
@@ -659,6 +660,26 @@ function closePopouts() {
 function refreshViewMenu() {
   updateCompactButton();
   updateAutoFitButton();
+}
+
+// A pop-out is anchored to its button, so on a narrow screen it can hang off
+// the edge and lose its labels. Shift it back inside the viewport instead.
+function clampPopout(menu) {
+  if (!menu || menu.hidden || !menu.offsetWidth) return;
+  menu.style.transform = '';
+  const rect = menu.getBoundingClientRect();
+  const margin = 8;
+  let dx = 0;
+  let dy = 0;
+  if (rect.left < margin) dx = margin - rect.left;
+  else if (rect.right > window.innerWidth - margin) dx = window.innerWidth - margin - rect.right;
+  if (rect.bottom > window.innerHeight - margin) dy = window.innerHeight - margin - rect.bottom;
+  if (dy < 0 && rect.top + dy < margin) dy = margin - rect.top;
+  if (dx || dy) menu.style.transform = 'translate(' + Math.round(dx) + 'px, ' + Math.round(dy) + 'px)';
+}
+
+function clampOpenPopouts() {
+  document.querySelectorAll('.popout-menu').forEach(clampPopout);
 }
 
 function setupPopout(btnId, menuId) {
@@ -674,6 +695,7 @@ function setupPopout(btnId, menuId) {
       btn.setAttribute('aria-expanded', 'true');
       btn.classList.add('active');
       refreshViewMenu();
+      clampPopout(menu);
     }
   });
   menu.addEventListener('click', function (e) {
@@ -687,6 +709,7 @@ function setupPopout(btnId, menuId) {
 
 setupPopout('btnViewMenu', 'viewMenu');
 setupPopout('btnAppMenu', 'appMenu');
+window.addEventListener('resize', clampOpenPopouts);
 
 document.addEventListener('click', function (e) {
   const inside = e.target && e.target.closest ? e.target.closest('.popout, .port-menu') : null;

@@ -426,6 +426,51 @@ clickSel(doc.getElementById('btnShowAll'));
 clickSel(doc.getElementById('btnAutoFit'));
 ok('auto-fit toggles back off', doc.getElementById('btnAutoFit').textContent.indexOf('off') >= 0, doc.getElementById('btnAutoFit').textContent);
 
+// ---- regression: mobile layout leaves no gap and clips no menu ----
+// Layout math: with body as a flex column of exactly 100dvh, a flex:none topbar
+// and a flex:1 .layout, the chain always fills the viewport to the pixel no
+// matter how tall the wrapped topbar gets — so no dark strip can appear at the
+// bottom, and nothing overflows. The old rule hard-coded that topbar height
+// (calc(100dvh - 132px)) and lost whenever the real one differed.
+const css = (await import('node:fs/promises')).readFile(root + 'docs/app.css', 'utf8');
+const appCss = await css;
+ok('no hard-coded stage height remains', appCss.indexOf('100dvh - 132px') < 0);
+ok('body fills the viewport as a flex column', /body\s*\{[^}]*display: flex;\s*flex-direction: column;/.test(appCss));
+ok('layout stretches under the real topbar', /\.layout\s*\{[\s\S]*?flex: 1 1 auto;[\s\S]*?min-height: 0;/.test(appCss));
+ok('mobile stage fills the remaining space', /\.stage\s*\{\s*flex: 1 1 auto;\s*min-height: 0;/.test(appCss));
+
+// The Settings drop-down is anchored to its button, which on a phone sits
+// left-of-centre; without clamping it hangs off the screen and loses its
+// labels ("ew model", "mport JSON"...). clampPopout shifts it back inside.
+function fakeViewport(w, h) {
+  Object.defineProperty(win, 'innerWidth', { value: w, configurable: true });
+  Object.defineProperty(win, 'innerHeight', { value: h, configurable: true });
+}
+const appMenu = doc.getElementById('appMenu');
+function fakeMenuBox(left, right, top, bottom, width) {
+  Object.defineProperty(appMenu, 'offsetWidth', { value: width, configurable: true });
+  appMenu.getBoundingClientRect = function () {
+    return { left: left, top: top, right: right, bottom: bottom, width: right - left, height: bottom - top, x: left, y: top };
+  };
+}
+function openAppMenu() {
+  if (!appMenu.hidden) clickSel(doc.getElementById('btnAppMenu'));
+  clickSel(doc.getElementById('btnAppMenu'));
+  return appMenu.style.transform || '';
+}
+fakeViewport(360, 792);
+fakeMenuBox(-30, 210, 48, 308, 240);
+ok('settings menu is shifted back on screen', openAppMenu() === 'translate(38px, 0px)', openAppMenu());
+fakeMenuBox(20, 260, 48, 308, 240);
+ok('a fitting menu is left alone', openAppMenu() === '', openAppMenu());
+fakeMenuBox(200, 440, 48, 308, 240);
+ok('menu overflowing the right edge is shifted back', openAppMenu() === 'translate(-88px, 0px)', openAppMenu());
+fakeMenuBox(-30, 210, 48, 900, 240);
+// taller than the viewport: shift up as far as the top margin allows (-40px
+// puts its top at 8px, not the naive -116px which would push it off the top)
+ok('menu overflowing the bottom is shifted up', openAppMenu() === 'translate(38px, -40px)', openAppMenu());
+clickSel(doc.getElementById('btnAppMenu'));
+
 console.log('passed: ' + passed + '   failed: ' + failures.length);
 for (const f of failures) console.log('  FAIL ' + f);
 if (failures.length) process.exit(1);

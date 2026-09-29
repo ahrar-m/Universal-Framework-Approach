@@ -31,6 +31,9 @@ body {
   line-height: 1.55;
   overflow: hidden;
   overscroll-behavior: none;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
 }
 
 /* ---------- top bar ---------- */
@@ -89,11 +92,12 @@ body {
 .btn-icon { font-family: var(--mono); }
 
 /* ---------- layout ---------- */
+.topbar { flex: none; }
 .layout {
   display: grid;
   grid-template-columns: 248px 1fr 330px;
-  height: calc(100vh - var(--topbar-h));
-  height: calc(100dvh - var(--topbar-h));
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .palette, .side {
   background: var(--bg-deep);
@@ -350,7 +354,7 @@ body {
   .layout { grid-template-columns: 210px 1fr 290px; }
 }
 @media (max-width: 860px) {
-  body { overflow: auto; }
+  body { overflow: hidden; }
   .actions { flex-wrap: wrap; overflow-x: visible; }
   .btn { padding: 6px 10px; font-size: 12px; }
   .topbar { height: auto; min-height: var(--topbar-h); flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
@@ -358,8 +362,8 @@ body {
   .model-name { flex: 1 1 120px; }
   .actions { order: 3; width: 100%; margin-left: 0; padding-bottom: 2px; }
   .save-state { position: absolute; right: 12px; top: 12px; }
-  .layout { display: block; height: auto; }
-  .stage { height: calc(100dvh - 132px); }
+  .layout { display: flex; flex-direction: column; }
+  .stage { flex: 1 1 auto; min-height: 0; height: auto; }
   .palette, .side {
     position: fixed; z-index: 45; left: 0; right: 0; bottom: 0;
     max-height: 72dvh; border-radius: 18px 18px 0 0; border: 1px solid var(--line-strong);
