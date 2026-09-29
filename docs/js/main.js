@@ -1,7 +1,7 @@
 // main.js — application controller: palette, inspector, sensitivity, persistence.
 import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, blockHasOutput, newId, isVariadicOp, opTerms, termLabel } from './engine.js';
 import { formatValue, formatNumber } from './units.js';
-import { createCanvas, blockRect, computeLayout } from './canvas.js';
+import { createCanvas, blockRect, computeLayout, portPoint, outPoint } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
 import { EXAMPLES } from './examples.js';
 
@@ -113,6 +113,7 @@ const canvasView = createCanvas({
   previewTarget: function (fromId, fromPort, fromDir, toId) { return autoTargetPort(fromDir, toId); },
   toggleCollapse: function (id) { toggleCollapse(id); },
   setFocus: function (id) { setFocus(id); },
+  onPortMenu: function (hit, x, y) { openPortMenu(hit, x, y); },
   getVisibleIds: function () { return visibleIds(); }
 });
 
@@ -223,7 +224,47 @@ function setFocus(id, options) {
   focusId = id && findBlock(id) ? id : null;
   renderFocusBar();
   recompute();
-  if (!options || !options.keepView) canvasView.fit();
+  // Entering or leaving Focus never moves the camera unless "Auto-fit camera"
+  // is switched on: on a big graph the zoom jump costs more than it helps.
+  if (autoFit && (!options || !options.keepView)) canvasView.fit();
+}
+
+// ------------------------------------------------- camera follow preference
+const VIEW_KEY = 'ufa.view.v1';
+let autoFit = loadViewPrefs();
+
+function loadViewPrefs() {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (raw) return !!JSON.parse(raw).autoFit;
+  } catch (err) {
+    // storage may be unavailable
+  }
+  return false;
+}
+
+function saveViewPrefs() {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify({ autoFit: autoFit }));
+  } catch (err) {
+    // ignore
+  }
+}
+
+function setAutoFit(on) {
+  autoFit = !!on;
+  saveViewPrefs();
+  refreshViewMenu();
+  toast(autoFit
+    ? 'Auto-fit camera on: entering or leaving Focus frames the branch.'
+    : 'Auto-fit camera off: the view stays where you put it.');
+}
+
+function updateAutoFitButton() {
+  const btn = document.getElementById('btnAutoFit');
+  if (!btn) return;
+  btn.textContent = 'Auto-fit camera: ' + (autoFit ? 'on' : 'off');
+  btn.setAttribute('aria-pressed', String(autoFit));
 }
 
 function renderFocusBar() {
@@ -260,7 +301,7 @@ function updateCompactButton() {
   const btn = document.getElementById('btnCompact');
   if (!btn) return;
   const anyExpanded = model.blocks.some(function (b) { return !b.collapsed; });
-  btn.textContent = anyExpanded ? 'Compact' : 'Expand';
+  btn.textContent = anyExpanded ? 'Compact every card' : 'Expand every card';
   btn.title = anyExpanded ? 'Shrink every card to a mini overview' : 'Restore every card to full size';
 }
 
@@ -423,18 +464,273 @@ function clearSiteData() {
   toast('Saved data cleared.');
 }
 
+const BLOCK_LABELS = { input: 'Value input', op: 'Operation', formula: 'Formula', result: 'Result' };
+
 function addBlock(type) {
-  const c = canvasView.centerPoint();
-  const spot = findFreeSpot(c.x - 106, c.y - 60);
+  openCreateDialog(type, function (fields) {
+    const c = canvasView.centerPoint();
+    const spot = findFreeSpot(c.x - 106, c.y - 60);
+    const block = commitBlock(type, fields, spot);
+    saveSoon();
+    recompute();
+    canvasView.setSelection({ kind: 'block', id: block.id });
+    renderSettings(block.id);
+    if (window.innerWidth <= 860) closeSheets();
+    toast(BLOCK_LABELS[type] + ' added.');
+  });
+}
+
+// A block created from the port menu lands on the side the value flows from
+// and is wired to the port that was pressed, before the card is drawn.
+function addBlockFromPort(hit, type) {
+  openCreateDialog(type, function (fields) {
+    const src = findBlock(hit.blockId);
+    if (!src) return;
+    const feedsIn = hit.dir === 'in';
+    const anchor = feedsIn ? portPoint(src, hit.portId) : outPoint(src);
+    const x = feedsIn ? src.x - 212 - 72 : src.x + 212 + 72;
+    const spot = findFreeSpot(x, anchor.y - 72);
+    const block = commitBlock(type, fields, spot);
+    if (feedsIn) {
+      connectPorts(block.id, 'out', 'out', src.id, hit.portId, 'in');
+    } else {
+      connectAuto(src.id, hit.portId, 'out', block.id);
+    }
+    canvasView.setSelection({ kind: 'block', id: block.id });
+    renderSettings(block.id);
+    toast(BLOCK_LABELS[type] + ' added and connected.');
+  });
+}
+
+function commitBlock(type, fields, spot) {
   const block = makeBlock(type, spot.x, spot.y);
-  if (type === 'result') block.title = 'Result';
+  applyDialogFields(block, type, fields);
   model.blocks.push(block);
+  return block;
+}
+
+// ------------------------------------------------------------- create dialog
+// Adding a block asks for its essentials up front, so the card that lands on
+// the canvas is already named. Enter creates; Esc or a click outside cancels
+// and leaves no block and no wire behind.
+let dialogState = null;
+
+function dialogOpen() { return !!dialogState; }
+
+function dialogFieldsHtml(type) {
+  const unitList = usedUnits().map(function (u) {
+    return '<option value="' + escapeHtml(u) + '">';
+  }).join('');
+  let html = '';
+  if (type === 'input') {
+    html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. price" spellcheck="false">');
+    html += '<div class="field-row">' +
+      field('Unit', '<input type="text" data-dlg="unit" list="dialogUnits" placeholder="e.g. $/unit" spellcheck="false">') +
+      field('Value', '<input type="number" step="any" data-dlg="value" placeholder="0">') +
+      '</div><datalist id="dialogUnits">' + unitList + '</datalist>';
+    html += '<div class="field-hint">Units are checked everywhere and labels cancel. An unknown word like <code>tickets</code> becomes its own unit.</div>';
+  } else if (type === 'op') {
+    html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. Gross margin" spellcheck="false">');
+    const options = Object.keys(OPS).map(function (key) {
+      return '<option value="' + key + '">' + OPS[key].label + '</option>';
+    }).join('');
+    html += field('Operation', '<select data-dlg="op">' + options + '</select>');
+    html += '<div class="field-hint">Add, Multiply, Min and Max take any number of inputs; the rest take two.</div>';
+  } else if (type === 'formula') {
+    html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. Net margin" spellcheck="false">');
+    html += '<div class="field-hint">Inputs and the expression are typed in Block settings once the card is on the canvas.</div>';
+  } else {
+    html += field('Name', '<input type="text" data-dlg="name" placeholder="e.g. Monthly profit" spellcheck="false">');
+    html += '<div class="field-hint">An optional display unit can be set in Block settings.</div>';
+  }
+  return html;
+}
+
+function openCreateDialog(type, onConfirm) {
+  const scrim = document.getElementById('dialogScrim');
+  const body = document.getElementById('dialogFields');
+  const title = document.getElementById('dialogTitle');
+  if (!scrim || !body || !title) return;
+  closePortMenu();
+  if (canvasView.isPending()) canvasView.clearSelection();
+  title.textContent = 'New ' + (BLOCK_LABELS[type] || 'block');
+  body.innerHTML = dialogFieldsHtml(type);
+  dialogState = { type: type, onConfirm: onConfirm };
+  scrim.hidden = false;
+  const first = body.querySelector('input, select');
+  if (first && first.focus) first.focus();
+}
+
+function closeCreateDialog() {
+  dialogState = null;
+  const scrim = document.getElementById('dialogScrim');
+  if (scrim) scrim.hidden = true;
+}
+
+function confirmCreateDialog() {
+  if (!dialogState) return;
+  const state = dialogState;
+  const body = document.getElementById('dialogFields');
+  const get = function (key) {
+    const el = body ? body.querySelector('[data-dlg="' + key + '"]') : null;
+    return el ? String(el.value).trim() : '';
+  };
+  const fields = { name: get('name'), unit: get('unit'), value: get('value'), op: get('op') };
+  closeCreateDialog();
+  if (state.onConfirm) state.onConfirm(fields);
+}
+
+function applyDialogFields(block, type, fields) {
+  if (fields.name) {
+    if (type === 'input') block.name = fields.name;
+    else block.title = fields.name;
+  }
+  if (type === 'input') {
+    block.unit = fields.unit;
+    block.value = fields.value === '' ? 0 : Number(fields.value);
+  }
+  if (type === 'op') {
+    if (fields.op && OPS[fields.op]) block.op = fields.op;
+    if (!fields.name) block.title = (OPS[block.op] || OPS.add).label;
+  }
+}
+
+// ---------------------------------------------------------------- port menu
+// Press-and-hold on a port, or a right-click, offers the blocks that can be
+// added there already wired up. A quick tap still starts a wire.
+let portMenuPort = null;
+
+function openPortMenu(hit, cx, cy) {
+  const menu = document.getElementById('portMenu');
+  const block = findBlock(hit.blockId);
+  if (!menu || !block) return;
+  closePopouts();
+  const addable = hit.dir === 'in'
+    ? ['input', 'op', 'formula']
+    : ['op', 'formula', 'result'];
+  const parts = [];
+  for (const type of addable) {
+    parts.push('<button type="button" class="menu-item" data-portadd="' + type + '">Add ' + BLOCK_LABELS[type] + ' here</button>');
+  }
+  const wires = hit.dir === 'in'
+    ? model.wires.filter(function (w) { return w.to === hit.blockId && w.toPort === hit.portId; })
+    : model.wires.filter(function (w) { return w.from === hit.blockId; });
+  parts.push('<button type="button" class="menu-item" data-portwire="1">Start a wire from here</button>');
+  if (wires.length) {
+    parts.push('<button type="button" class="menu-item menu-danger" data-portdisconnect="1">Disconnect' + (wires.length > 1 ? ' (' + wires.length + ' wires)' : '') + '</button>');
+  }
+  parts.push('<div class="menu-note">' + (hit.dir === 'in' ? 'this input is fed' : 'this output feeds on') + '</div>');
+  menu.innerHTML = parts.join('');
+  portMenuPort = hit;
+  menu.style.left = Math.round(Math.max(8, Math.min(cx, window.innerWidth - 250))) + 'px';
+  menu.style.top = Math.round(Math.max(8, Math.min(cy, window.innerHeight - 300))) + 'px';
+  menu.hidden = false;
+}
+
+function closePortMenu() {
+  portMenuPort = null;
+  const menu = document.getElementById('portMenu');
+  if (menu) menu.hidden = true;
+}
+
+function disconnectPort(hit) {
+  model.wires = hit.dir === 'in'
+    ? model.wires.filter(function (w) { return !(w.to === hit.blockId && w.toPort === hit.portId); })
+    : model.wires.filter(function (w) { return w.from !== hit.blockId; });
   saveSoon();
   recompute();
-  canvasView.setSelection({ kind: 'block', id: block.id });
-  renderSettings(block.id);
-  if (window.innerWidth <= 860) closeSheets();
+  toast('Wire removed.');
 }
+
+// ------------------------------------------------------------- pop-out menus
+// The zoom row keeps only minus, plus and one View button; 1:1, Fit, Arrange,
+// Compact and Auto-fit live in its pop-out. The gear in the top bar holds the
+// model actions. Both close on an outside click or Escape.
+function closePopouts() {
+  document.querySelectorAll('.popout-menu').forEach(function (menu) {
+    menu.hidden = true;
+  });
+  document.querySelectorAll('.popout > button').forEach(function (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.classList.remove('active');
+  });
+}
+
+function refreshViewMenu() {
+  updateCompactButton();
+  updateAutoFitButton();
+}
+
+function setupPopout(btnId, menuId) {
+  const btn = document.getElementById(btnId);
+  const menu = document.getElementById(menuId);
+  if (!btn || !menu) return;
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const open = !menu.hidden;
+    closePopouts();
+    if (!open) {
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      btn.classList.add('active');
+      refreshViewMenu();
+    }
+  });
+  menu.addEventListener('click', function (e) {
+    const item = e.target.closest ? e.target.closest('.menu-item') : null;
+    if (!item) return;
+    // the auto-fit switch flips in place so its state stays visible
+    if (item.id === 'btnAutoFit') refreshViewMenu();
+    else closePopouts();
+  });
+}
+
+setupPopout('btnViewMenu', 'viewMenu');
+setupPopout('btnAppMenu', 'appMenu');
+
+document.addEventListener('click', function (e) {
+  const inside = e.target && e.target.closest ? e.target.closest('.popout, .port-menu') : null;
+  if (!inside) {
+    closePopouts();
+    closePortMenu();
+  }
+});
+
+const portMenuEl = document.getElementById('portMenu');
+if (portMenuEl) {
+  portMenuEl.addEventListener('click', function (e) {
+    const btn = e.target.closest ? e.target.closest('button') : null;
+    if (!btn || !portMenuPort) return;
+    const hit = portMenuPort;
+    const addType = btn.getAttribute('data-portadd');
+    closePortMenu();
+    if (addType) {
+      addBlockFromPort(hit, addType);
+      return;
+    }
+    if (btn.getAttribute('data-portwire')) {
+      canvasView.startLink(hit);
+      return;
+    }
+    if (btn.getAttribute('data-portdisconnect')) disconnectPort(hit);
+  });
+}
+
+const dialogScrim = document.getElementById('dialogScrim');
+const dialogForm = document.getElementById('blockDialog');
+if (dialogForm) {
+  dialogForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    confirmCreateDialog();
+  });
+}
+if (dialogScrim) {
+  dialogScrim.addEventListener('click', function (e) {
+    if (e.target === dialogScrim) closeCreateDialog();
+  });
+}
+const dialogCancel = document.getElementById('dialogCancel');
+if (dialogCancel) dialogCancel.addEventListener('click', closeCreateDialog);
 
 // -------------------------------------------------------------- recompute
 function recompute() {
@@ -800,8 +1096,8 @@ document.getElementById('btnNew').addEventListener('click', function () {
   canvasView.fit();
 });
 
-document.getElementById('btnFit').addEventListener('click', function () { canvasView.fit(); });
 document.getElementById('btnZoomFit').addEventListener('click', function () { canvasView.fit(); });
+document.getElementById('btnAutoFit').addEventListener('click', function () { setAutoFit(!autoFit); });
 document.getElementById('btnZoomIn').addEventListener('click', function () { canvasView.zoomBy(1.22); });
 document.getElementById('btnZoomOut').addEventListener('click', function () { canvasView.zoomBy(1 / 1.22); });
 document.getElementById('btnZoomReset').addEventListener('click', function () { canvasView.resetZoom(); });
@@ -883,15 +1179,18 @@ els.btnWireDeselect.addEventListener('click', function () {
 window.addEventListener('keydown', function (e) {
   const tag = (e.target.tagName || '').toLowerCase();
   const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
-  if ((e.key === 'Delete' || e.key === 'Backspace') && !typing) {
-    if (canvasView.deleteSelection()) {
-      renderSettings(null);
-      saveSoon();
-      recompute();
-      e.preventDefault();
-    }
-  }
   if (e.key === 'Escape') {
+    // Escape backs out one layer at a time: dialog, then port menu, then pop-out
+    if (dialogOpen()) {
+      closeCreateDialog();
+      return;
+    }
+    const portMenu = document.getElementById('portMenu');
+    if (portMenu && !portMenu.hidden) {
+      closePortMenu();
+      return;
+    }
+    closePopouts();
     if (focusId) {
       setFocus(null);
       return;
@@ -899,6 +1198,15 @@ window.addEventListener('keydown', function (e) {
     canvasView.clearSelection();
     renderSettings(null);
     closeSheets();
+    return;
+  }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !dialogOpen()) {
+    if (canvasView.deleteSelection()) {
+      renderSettings(null);
+      saveSoon();
+      recompute();
+      e.preventDefault();
+    }
   }
 });
 
@@ -929,6 +1237,7 @@ els.scrim.addEventListener('click', closeSheets);
 // ------------------------------------------------------------------- boot
 recompute();
 renderSettings(null);
+refreshViewMenu();
 setTimeout(function () {
   if (model.blocks.length) canvasView.fit();
   else canvasView.render();

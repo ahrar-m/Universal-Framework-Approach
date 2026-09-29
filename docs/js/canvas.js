@@ -369,6 +369,8 @@ export function createCanvas(opts) {
   let tempWire = null;     // { from, to: {x, y} }
   let snapTarget = null;   // { blockId, portId, dir, x, y } the wire is magnetised to
   let selection = null;    // { kind: 'block' | 'wire', id }
+  let holdTimer = null;    // press-and-hold timer for the port menu
+  let holdData = null;     // { hit, x, y } the hold started on
   let notifiedWire = undefined; // last wire id passed to opts.onWireSelect
 
   function model() { return opts.getModel(); }
@@ -620,6 +622,58 @@ export function createCanvas(opts) {
     return out.join('');
   }
 
+  // ------------------------------------------- press-and-hold on a port
+  // A quick tap on a port starts a wire exactly as before; keeping the finger
+  // (or the mouse button) down opens the port menu instead. Any real movement
+  // cancels the hold, so it never fights a wire drag.
+  function clearHold() {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    holdData = null;
+  }
+
+  function startHold(hit, e) {
+    clearHold();
+    holdData = { hit: hit, x: e.clientX, y: e.clientY };
+    holdTimer = setTimeout(function () {
+      holdTimer = null;
+      const info = holdData;
+      holdData = null;
+      if (!info) return;
+      // the menu wins: abandon any wire in progress
+      pending = null;
+      tempWire = null;
+      snapTarget = null;
+      gesture = { kind: 'menu' };
+      render();
+      if (opts.onPortMenu) opts.onPortMenu(info.hit, info.x, info.y);
+    }, 480);
+  }
+
+  // Right-click (or a mouse with a button-2 press) opens the same menu.
+  function onContextMenu(e) {
+    const hit = hitTarget(e);
+    if (hit.kind !== 'port') return;
+    e.preventDefault();
+    clearHold();
+    pending = null;
+    tempWire = null;
+    snapTarget = null;
+    gesture = null;
+    render();
+    if (opts.onPortMenu) opts.onPortMenu(hit, e.clientX, e.clientY);
+  }
+
+  // Begin a wire from a port the way a tap would, for the menu's "start wire".
+  function startLink(hit) {
+    const block = model().blocks.find(function (b) { return b.id === hit.blockId; });
+    if (!block) return;
+    const p = hit.dir === 'out' ? outPoint(block) : portPoint(block, hit.portId);
+    pending = { blockId: hit.blockId, portId: hit.portId, dir: hit.dir };
+    tempWire = { from: pending, to: { x: p.x, y: p.y } };
+    snapTarget = null;
+    render();
+  }
+
   // ------------------------------------------------------------- interaction
   function hitTarget(e) {
     // With pointer capture, e.target is the svg root; hit-test the real element.
@@ -705,6 +759,7 @@ export function createCanvas(opts) {
     if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
     svg.setPointerCapture && svg.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, t: Date.now() });
+    clearHold();
     if (pointers.size === 2) {
       const pts = Array.from(pointers.values());
       pinch = {
@@ -719,6 +774,7 @@ export function createCanvas(opts) {
     const hit = hitTarget(e);
     const pt = clientToCanvas(e.clientX, e.clientY);
     if (hit.kind === 'port') {
+      startHold(hit, e);
       if (pending && pending.blockId !== hit.blockId) {
         opts.connect(pending.blockId, pending.portId, pending.dir, hit.blockId, hit.portId, hit.dir);
         pending = null;
@@ -784,6 +840,7 @@ export function createCanvas(opts) {
   }
 
   function onMove(e) {
+    if (holdData && (Math.abs(e.clientX - holdData.x) + Math.abs(e.clientY - holdData.y) > 9)) clearHold();
     const p = pointers.get(e.pointerId);
     if (p) { p.x = e.clientX; p.y = e.clientY; }
     if (gesture && gesture.kind === 'pinch' && pointers.size >= 2) {
@@ -827,13 +884,16 @@ export function createCanvas(opts) {
   }
 
   function onUp(e) {
+    clearHold();
     const p = pointers.get(e.pointerId);
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = null;
     if (!gesture) return;
     const isTap = p ? (Math.abs(e.clientX - p.startX) + Math.abs(e.clientY - p.startY) < 9 && Date.now() - p.t < 700) : false;
     const kind = gesture.kind;
-    if (kind === 'wire') {
+    if (kind === 'menu') {
+      // the port menu is already open; let it take the next tap
+    } else if (kind === 'wire') {
       const hit = hitTarget(e);
       const linked = finishLink(hit);
       if (!linked && !isTap) {
@@ -881,6 +941,7 @@ export function createCanvas(opts) {
   svg.addEventListener('pointerup', onUp);
   svg.addEventListener('pointercancel', onUp);
   svg.addEventListener('wheel', onWheel, { passive: false });
+  svg.addEventListener('contextmenu', onContextMenu);
 
   // ------------------------------------------------------------------- api
   // The pan/zoom that frames every visible block. Pass `targets` (id -> {x, y})
@@ -955,6 +1016,7 @@ export function createCanvas(opts) {
       return true;
     },
     isPending: function () { return !!pending; },
+    startLink: startLink,
     getView: function () { return Object.assign({}, view); },
     setView: function (v) { view.x = v.x; view.y = v.y; view.k = v.k; render(); }
   };

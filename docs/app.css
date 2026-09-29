@@ -162,11 +162,63 @@ body {
 .stage-hint strong { display: block; color: var(--text); margin-bottom: 4px; }
 .stage-hint em { font-style: normal; color: var(--accent); }
 .zoom-controls {
-  position: absolute; right: 14px; bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap;
-  justify-content: flex-end; max-width: calc(100% - 28px);
+  position: absolute; left: 14px; bottom: 14px; display: flex; gap: 6px; align-items: flex-end;
+  max-width: calc(100% - 28px); z-index: 6;
 }
 .zoom-controls .btn { background: rgba(18, 26, 46, 0.9); }
 .btn.active { border-color: var(--accent); color: var(--accent); }
+
+/* pop-out menus: the view cluster's menu opens upward, the gear's drops down */
+.popout { position: relative; display: flex; }
+.popout-menu {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 60;
+  min-width: 228px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: rgba(18, 26, 46, 0.98); border: 1px solid var(--line-strong);
+  border-radius: 12px; box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+}
+.popout-menu-right { left: auto; right: 0; bottom: auto; top: calc(100% + 8px); }
+.popout-menu[hidden] { display: none; }
+.menu-item {
+  text-align: left; background: none; border: 0; color: var(--text);
+  padding: 9px 11px; border-radius: 8px; font-size: 12.5px; font-family: var(--sans);
+  cursor: pointer; white-space: nowrap;
+}
+.menu-item:hover { background: rgba(110, 168, 254, 0.14); }
+.menu-item.menu-danger { color: var(--danger); }
+.menu-item.menu-danger:hover { background: rgba(252, 129, 129, 0.12); }
+.menu-toggle[aria-pressed="true"] { color: var(--accent); background: rgba(110, 168, 254, 0.12); }
+.menu-note {
+  color: var(--muted); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 7px 11px 4px;
+}
+.gear { font-size: 16px; line-height: 1; margin-right: 2px; }
+.btn-primary { background: var(--accent); border-color: transparent; color: #071022; font-weight: 650; }
+.btn-primary:hover { background: #86b7ff; }
+
+/* port menu: press-and-hold (or right-click) on a port */
+.port-menu {
+  position: fixed; left: 0; top: 0; z-index: 65;
+  min-width: 218px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: rgba(18, 26, 46, 0.99); border: 1px solid var(--line-strong);
+  border-radius: 12px; box-shadow: 0 18px 42px rgba(0, 0, 0, 0.55);
+}
+.port-menu[hidden] { display: none; }
+
+/* create-block dialog */
+.dialog-scrim {
+  position: fixed; inset: 0; z-index: 70; display: flex; align-items: center;
+  justify-content: center; padding: 18px; background: rgba(4, 8, 18, 0.66);
+}
+.dialog-scrim[hidden] { display: none; }
+.dialog {
+  width: min(430px, 100%); max-height: 86dvh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line-strong); border-radius: 16px;
+  padding: 18px 18px 16px; box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+}
+.dialog h3 {
+  margin: 0 0 14px; font-size: 15px; font-weight: 650; letter-spacing: 0.01em;
+}
+.dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
 /* focus view banner */
 .focus-bar {
@@ -317,7 +369,8 @@ body {
   }
   .palette.open, .side.open { transform: translateY(0); }
   .fab-row { display: block; }
-  .zoom-controls { bottom: 18px; left: 14px; right: auto; }
+  .zoom-controls { bottom: 18px; }
+  .popout-menu { min-width: 200px; }
 }
 @media (min-width: 861px) {
   .sheet-scrim { display: none; }

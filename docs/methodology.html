@@ -309,11 +309,12 @@
 </ul>
 
 <h2>Wiring without the fiddling</h2>
-<p>Connecting two blocks should not take three attempts. Three shortcuts make a link hard to miss, plus one that undoes one:</p>
+<p>Connecting two blocks should not take three attempts. Four shortcuts make a link hard to miss, plus one that undoes one:</p>
 <ul>
   <li><strong>Wires magnetise to ports.</strong> Drag from a port towards the next block &mdash; well before you reach it, the wire snaps to the nearest port it is allowed to reach and lights it up. Release anywhere in that area and the link is made.</li>
   <li><strong>Drop the wire on the card itself.</strong> Let go anywhere on a block and the wire lands on that block's first free input &mdash; or on its output when you drag from an input. On an Add or Multiply block whose inputs are all filled, a fresh input is grown for the wire.</li>
   <li><strong>Tap, then tap.</strong> On touch: tap the output port, then tap the destination card or its port. While you decide, every port that can accept the link glows; tapping the same port again abandons the link.</li>
+  <li><strong>Add the next block already wired.</strong> Press and hold a port on a phone &mdash; or right-click it with a mouse &mdash; and a menu offers exactly the blocks that fit there: a Value input, Operation or Formula to <em>feed</em> an input port, or an Operation, Formula or Result to <em>consume</em> an output. The new block is named in a small dialog, lands on the side the value flows from, and is connected before it appears. The same menu offers <em>Start a wire</em> and, on a connected port, <em>Disconnect</em>.</li>
   <li><strong>Removing a wire.</strong> Tap the wire &mdash; it lights up and a small bar names the link &mdash; then tap <em>Delete wire</em>. This is the phone-friendly path, where there is no Delete key to press. You can also open the destination block's settings and tap the <code>&times;</code> beside the input to drop just that wire, or press <code>Delete</code> on a keyboard.</li>
 </ul>
 
@@ -321,7 +322,7 @@
 <ul>
   <li><strong>Arrange</strong> glides the blocks into flow order: every value input lands beside the block it is wired into (lined up with the port it feeds, instead of a far-left column), results on the right, and columns ordered so wires stay short and crossings few. Unrelated branches get their own horizontal bands, so wires from one part of the model never weave through another. You can still drag any block afterwards &mdash; the layout is a starting point, not a lock.</li>
   <li><strong>Compact</strong> shrinks every card to a mini overview that keeps the name and the live value, so a whole model fits on one screen; press it again to restore. The <code>&#8722;</code> button on a single card shrinks just that card and the <code>+</code> button expands it again, so you can mix overview and detail freely.</li>
-  <li><strong>Focus</strong> &mdash; the target button on a card, or <code>Focus this branch</code> in Block settings &mdash; opens one block together with everything it is built from, on its own. This is how to work inside a large block with many sub-connections without the rest of the model in the way. <code>Show whole model</code> in the banner, or <code>Esc</code>, leaves the focus view.</li>
+  <li><strong>Focus</strong> &mdash; the target button on a card, or <code>Focus this branch</code> in Block settings &mdash; opens one block together with everything it is built from, on its own. This is how to work inside a large block with many sub-connections without the rest of the model in the way. <code>Show whole model</code> in the banner, or <code>Esc</code>, leaves the focus view. Entering and leaving Focus never moves the camera &mdash; on a big graph the zoom jump costs more than it helps &mdash; so the view stays exactly where you put it. Prefer the old behaviour? Switch on <em>Auto-fit camera</em> in the <em>View</em> menu at the bottom left of the canvas and Focus re-frames the branch again.</li>
 </ul>
 
 <h2>Units and dimensional checking</h2>
@@ -352,8 +353,8 @@
 <p>This builds a complete model using the tool's real interface. On a desktop the <strong>Blocks palette</strong> is the left panel, listing <code>Value input</code>, <code>Operation</code>, <code>Formula</code> and <code>Result</code>. On a phone the palette opens from the <code>+ Blocks</code> button, and the settings panel is called <strong>Block settings</strong>.</p>
 
 <ol class="steps">
-  <li><strong>Start clean.</strong> Press <code>New</code> in the toolbar. The toolbar also offers <code>Import</code>, <code>Export JSON</code>, <code>Export SVG</code>, <code>Export PNG</code>, <code>Docs</code> and <code>Fit</code>.</li>
-  <li><strong>Add the four Value inputs.</strong> Drag <code>Value input</code> from the Blocks palette onto the canvas four times. Select each one and fill in <strong>Block settings</strong> with the fields <code>Name</code>, <code>Value</code>, <code>Unit</code>, <code>Min</code>, <code>Likely</code>, <code>Max</code>:
+  <li><strong>Start clean.</strong> Press the <em>Settings</em> gear at the top right and choose <code>New</code>. Behind that gear are all the model actions: <code>Import</code>, <code>Export JSON</code>, <code>Export SVG</code>, <code>Export PNG</code> and <code>Clear data</code>; the toolbar keeps <code>Docs</code>. The canvas view controls sit at the bottom left: <code>&#8722;</code> and <code>+</code>, plus a <em>View</em> button that pops out <code>1:1</code>, <code>Fit</code>, <code>Arrange</code>, <code>Compact</code> and <em>Auto-fit camera</em>.</li>
+  <li><strong>Add the four Value inputs.</strong> Add <code>Value input</code> from the Blocks palette four times &mdash; each one opens a small dialog that takes the <code>Name</code>, <code>Unit</code> and <code>Value</code> right away (press Enter to add it). Select each card afterwards to complete <strong>Block settings</strong> with <code>Min</code>, <code>Likely</code> and <code>Max</code>:
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Name</th><th>Value</th><th>Unit</th><th>Min</th><th>Likely</th><th>Max</th></tr></thead>
@@ -396,9 +397,9 @@
   <li><strong>Unit mismatch errors usually mean a labelling mistake.</strong> Most often a total was labelled as a per-unit rate (or the reverse) &mdash; for example <code>total cost</code> tagged as <code>$/unit</code>. Fix the unit on the offending block.</li>
   <li><strong>New here, or just exploring?</strong> The <strong>Blocks palette</strong> has ready-made examples &mdash; <code>Monthly profit</code>, <code>Line efficiency</code> and <code>Design score</code>. Load one, change the numbers, rewire it; nothing is locked.</li>
   <li><strong>Formulas resolve names from their own Inputs list.</strong> If an expression cannot find a name, that name is missing from the block's <code>Inputs</code>; add it with <code>Add input</code> and wire a value into it.</li>
-  <li><strong>The model autosaves in your browser</strong> (localStorage), so closing the tab does not lose your work. <code>Export JSON</code> and <code>Import JSON</code> move a model between devices. <code>Clear data</code> in the toolbar deletes everything this site stored in your browser.</li>
+  <li><strong>The model autosaves in your browser</strong> (localStorage), so closing the tab does not lose your work. <code>Export JSON</code> and <code>Import JSON</code> move a model between devices. <code>Clear data</code> in the Settings menu at the top right deletes everything this site stored in your browser.</li>
   <li><strong>Wiring does not need pixel precision.</strong> A wire snaps to the nearest legal port and a link dropped on a card uses its first free input &mdash; if a connection is refused, the message says why (a loop, a second output, or a unit clash).</li>
-  <li><strong>Big model? Use <code>Arrange</code>, <code>Compact</code> and <code>Focus</code>.</strong> Arrange sorts the blocks into flow order, Compact turns them into a one-screen overview, and Focus opens one block with its own inputs.</li>
+  <li><strong>Big model? Use <code>Arrange</code>, <code>Compact</code> and <code>Focus</code>.</strong> Arrange sorts the blocks into flow order, Compact turns them into a one-screen overview, and Focus opens one block with its own inputs. All three sit in the <em>View</em> menu at the bottom left of the canvas &mdash; and leave <em>Auto-fit camera</em> off to keep the view still while you move in and out of Focus.</li>
   <li><strong>Choose the export for the job.</strong> <code>Export SVG</code> stays crisp when zoomed &mdash; use it for print and slides &mdash; while <code>Export PNG</code> is a 3x raster for places that only accept images. Every exported file is named after the model plus a date-timestamp (like <code>monthly-profit-20250929-142530.svg</code>), so exporting twice never overwrites the earlier file.</li>
 </ul>
 

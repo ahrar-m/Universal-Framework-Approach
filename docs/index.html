@@ -16,14 +16,18 @@
     </div>
     <input id="modelName" class="model-name" type="text" value="Untitled model" aria-label="Model name" spellcheck="false">
     <nav class="actions" aria-label="Model actions">
-      <button type="button" id="btnNew" class="btn">New</button>
-      <button type="button" id="btnImport" class="btn">Import</button>
-      <button type="button" id="btnExportJson" class="btn">Export JSON</button>
-      <button type="button" id="btnExportSvg" class="btn">Export SVG</button>
-      <button type="button" id="btnExportPng" class="btn">Export PNG</button>
       <a class="btn btn-link" href="methodology.html">Docs</a>
-      <button type="button" id="btnFit" class="btn btn-icon" title="Fit the model in view">Fit</button>
-      <button type="button" id="btnClear" class="btn btn-danger" title="Delete everything this site saved in your browser">Clear data</button>
+      <div class="popout popout-top">
+        <button type="button" id="btnAppMenu" class="btn btn-icon" title="Model actions and settings" aria-haspopup="true" aria-expanded="false"><span class="gear" aria-hidden="true">&#9881;</span> Settings</button>
+        <div class="popout-menu popout-menu-right" id="appMenu" hidden>
+          <button type="button" id="btnNew" class="menu-item">New model</button>
+          <button type="button" id="btnImport" class="menu-item">Import JSON</button>
+          <button type="button" id="btnExportJson" class="menu-item">Export JSON</button>
+          <button type="button" id="btnExportSvg" class="menu-item">Export SVG</button>
+          <button type="button" id="btnExportPng" class="menu-item">Export PNG (3x)</button>
+          <button type="button" id="btnClear" class="menu-item menu-danger" title="Delete everything this site saved in your browser">Clear data</button>
+        </div>
+      </div>
     </nav>
     <div class="save-state" id="saveState" title="Autosaved in this browser">saved</div>
   </header>
@@ -71,7 +75,9 @@
         Drag from the round port on the right of a card towards the next card &mdash; the wire
         magnetises to the nearest port, and dropping it anywhere on a card uses that card's first
         free input. On touch: tap the output port, then tap the destination card or port.
-        To remove a wire, tap it so it lights up, then tap <em>Delete wire</em> &mdash; no keyboard needed on a phone.
+        <strong>Press and hold a port</strong> (or right-click it) to add a new block that is
+        already wired to it. To remove a wire, tap it so it lights up, then tap <em>Delete wire</em>
+        &mdash; no keyboard needed on a phone.
         <br><br>
         <strong>Keeping it readable</strong>
         <em>Arrange</em> glides the blocks into flow order and drops every input right next to the block it is wired into (not in a far-left column), <em>Compact</em> shrinks every card to a
@@ -95,13 +101,19 @@
         <button type="button" id="btnDeleteWire" class="btn btn-danger" title="Remove the selected wire">Delete wire</button>
         <button type="button" id="btnWireDeselect" class="btn" title="Leave the wire on the canvas, just deselect it">Deselect</button>
       </div>
-      <div class="zoom-controls" aria-hidden="false">
-        <button type="button" id="btnArrange" class="btn btn-icon" title="Glide the blocks into flow order, each input beside the block it is wired into">Arrange</button>
-        <button type="button" id="btnCompact" class="btn btn-icon" title="Shrink every card to a mini overview">Compact</button>
+      <div class="zoom-controls" id="viewControls">
         <button type="button" id="btnZoomOut" class="btn btn-icon" title="Zoom out">−</button>
-        <button type="button" id="btnZoomReset" class="btn btn-icon" title="Reset zoom">1:1</button>
+        <div class="popout">
+          <button type="button" id="btnViewMenu" class="btn btn-icon" title="View options: fit, arrange, compact, auto-fit" aria-haspopup="true" aria-expanded="false">View &#9662;</button>
+          <div class="popout-menu" id="viewMenu" hidden>
+            <button type="button" id="btnZoomReset" class="menu-item" title="Reset the zoom level to 1:1">1:1 &mdash; reset zoom</button>
+            <button type="button" id="btnZoomFit" class="menu-item" title="Fit the model in view">Fit &mdash; frame the model</button>
+            <button type="button" id="btnArrange" class="menu-item" title="Glide the blocks into flow order, each input beside the block it is wired into">Arrange &mdash; flow order</button>
+            <button type="button" id="btnCompact" class="menu-item" title="Shrink every card to a mini overview">Compact every card</button>
+            <button type="button" id="btnAutoFit" class="menu-item menu-toggle" aria-pressed="false" title="Let entering or leaving Focus re-frame the camera">Auto-fit camera: off</button>
+          </div>
+        </div>
         <button type="button" id="btnZoomIn" class="btn btn-icon" title="Zoom in">+</button>
-        <button type="button" id="btnZoomFit" class="btn btn-icon" title="Fit the model in view">Fit</button>
       </div>
     </section>
 
@@ -132,6 +144,18 @@
     <button type="button" class="fab" id="btnPalette">+ Blocks</button>
     <button type="button" class="fab fab-alt" id="btnSettings">Settings</button>
   </div>
+
+  <div class="dialog-scrim" id="dialogScrim" hidden>
+    <form class="dialog" id="blockDialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h3 id="dialogTitle">New block</h3>
+      <div id="dialogFields"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="dialogCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="dialogCreate">Add block</button>
+      </div>
+    </form>
+  </div>
+  <div class="port-menu" id="portMenu" role="menu" hidden></div>
 
   <input type="file" id="fileInput" accept="application/json,.json" hidden>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
