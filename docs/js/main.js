@@ -1,5 +1,5 @@
 // main.js — application controller: palette, inspector, sensitivity, persistence.
-import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, newId, isVariadicOp, opTerms, termLabel } from './engine.js';
+import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, blockHasOutput, newId, isVariadicOp, opTerms, termLabel } from './engine.js';
 import { COMMON_UNITS, formatValue, formatNumber } from './units.js';
 import { createCanvas, blockRect } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
@@ -103,7 +103,12 @@ const canvasView = createCanvas({
     model.wires = model.wires.filter(function (w) { return w.id !== id; });
     saveSoon();
     recompute();
-  }
+  },
+  connectAuto: function (fromId, fromPort, fromDir, toId) { connectAuto(fromId, fromPort, fromDir, toId); },
+  previewTarget: function (fromId, fromPort, fromDir, toId) { return autoTargetPort(fromDir, toId); },
+  toggleCollapse: function (id) { toggleCollapse(id); },
+  setFocus: function (id) { setFocus(id); },
+  getVisibleIds: function () { return visibleIds(); }
 });
 
 function connectPorts(fromId, fromPort, fromDir, toId, toPort, toDir) {
@@ -149,9 +154,195 @@ function reaches(startId, targetId) {
   return false;
 }
 
+// ------------------------------------------------------- connect shortcuts
+// Where a loose wire end should land when it is dropped on a card itself:
+// the first input that is still free, or the output when dragging from an input.
+function autoTargetPort(fromDir, toId) {
+  const target = findBlock(toId);
+  if (!target) return null;
+  if (fromDir === 'in') return blockHasOutput(target) ? 'out' : null;
+  const used = {};
+  for (const w of model.wires) if (w.to === target.id) used[w.toPort] = true;
+  const ports = blockPorts(target);
+  for (const i = 0; i < ports.length; i++) if (!used[ports[i].id]) return ports[i].id;
+  return null;
+}
+
+function connectAuto(fromId, fromPort, fromDir, toId) {
+  const target = findBlock(toId);
+  if (!target) return;
+  if (fromDir === 'out') {
+    let portId = autoTargetPort('out', toId);
+    if (!portId && target.type === 'op' && isVariadicOp(target.op)) {
+      // endless inputs: grow one more term and land the wire on it
+      const terms = opTerms(target).slice();
+      terms.push(freeTermId(terms));
+      target.terms = terms;
+      portId = terms[terms.length - 1];
+    }
+    if (!portId) {
+      toast('Every input on "' + blockTitle(target) + '" is already connected.');
+      return;
+    }
+    connectPorts(fromId, fromPort, 'out', target.id, portId, 'in');
+    return;
+  }
+  const outPort = autoTargetPort('in', toId);
+  if (!outPort) {
+    toast('The Result block has no output port.');
+    return;
+  }
+  connectPorts(target.id, 'out', 'out', fromId, fromPort, 'in');
+}
+
+// --------------------------------------------------------------- focus view
+// Focus opens one block with everything it is built from, on its own.
+let focusId = null;
+
+function visibleIds() {
+  if (!focusId) return null;
+  const start = findBlock(focusId);
+  if (!start) return null;
+  const set = new Set();
+  const stack = [start.id];
+  while (stack.length) {
+    const id = stack.pop();
+    if (set.has(id)) continue;
+    set.add(id);
+    for (const w of model.wires) if (w.to === id) stack.push(w.from);
+  }
+  return set;
+}
+
+function setFocus(id, options) {
+  focusId = id && findBlock(id) ? id : null;
+  renderFocusBar();
+  recompute();
+  if (!options || !options.keepView) canvasView.fit();
+}
+
+function renderFocusBar() {
+  const bar = document.getElementById('focusBar');
+  const label = document.getElementById('focusLabel');
+  if (!bar || !label) return;
+  const block = focusId ? findBlock(focusId) : null;
+  if (!block) {
+    bar.hidden = true;
+    return;
+  }
+  const vis = visibleIds();
+  label.textContent = 'Focused on "' + blockTitle(block) + '" — ' + (vis ? vis.size : 1) + ' blocks, with everything they are built from';
+  bar.hidden = false;
+}
+
+// ------------------------------------------------------ collapse and layout
+function toggleCollapse(id) {
+  const block = findBlock(id);
+  if (!block) return;
+  block.collapsed = !block.collapsed;
+  saveSoon();
+  recompute();
+}
+
+function setAllCollapsed(collapsed) {
+  for (const b of model.blocks) b.collapsed = collapsed;
+  saveSoon();
+  recompute();
+  canvasView.fit();
+}
+
+function updateCompactButton() {
+  const btn = document.getElementById('btnCompact');
+  if (!btn) return;
+  const anyExpanded = model.blocks.some(function (b) { return !b.collapsed; });
+  btn.textContent = anyExpanded ? 'Compact' : 'Expand';
+  btn.title = anyExpanded ? 'Shrink every card to a mini overview' : 'Restore every card to full size';
+}
+
+// Lay the model out in flow order: inputs on the left, the result on the right,
+// columns ordered to keep wires short and crossings few.
+function autoArrange() {
+  const blocks = model.blocks;
+  if (!blocks.length) {
+    toast('Add some blocks first.');
+    return;
+  }
+  // column = length of the longest chain of wires feeding the block
+  const depth = {};
+  for (const b of blocks) depth[b.id] = 0;
+  for (let pass = 0; pass <= blocks.length; pass++) {
+    let changed = false;
+    for (const w of model.wires) {
+      if (depth[w.to] <= depth[w.from]) { depth[w.to] = depth[w.from] + 1; changed = true; }
+    }
+    if (!changed) break;
+  }
+  const byDepth = {};
+  for (const b of blocks) {
+    const d = depth[b.id];
+    if (!byDepth[d]) byDepth[d] = [];
+    byDepth[d].push(b);
+  }
+  const columns = Object.keys(byDepth).map(Number).sort(function (a, b) { return a - b; })
+    .map(function (k) { return byDepth[k]; });
+
+  // order each column by the average position of its neighbours (a few sweeps)
+  const pos = {};
+  columns.forEach(function (col) { col.forEach(function (b, i) { pos[b.id] = i; }); });
+  function barycenter(b) {
+    const near = [];
+    for (const w of model.wires) {
+      if (w.to === b.id && pos[w.from] !== undefined) near.push(pos[w.from]);
+      if (w.from === b.id && pos[w.to] !== undefined) near.push(pos[w.to]);
+    }
+    if (!near.length) return null;
+    return near.reduce(function (sum, v) { return sum + v; }, 0) / near.length;
+  }
+  for (let sweep = 0; sweep < 6; sweep++) {
+    const order = sweep % 2 === 0 ? columns : columns.slice().reverse();
+    for (const col of order) {
+      const decorated = col.map(function (b, i) { return { b: b, key: barycenter(b), i: i }; });
+      decorated.sort(function (m, n) {
+        if (m.key === null && n.key === null) return m.i - n.i;
+        if (m.key === null) return 1;
+        if (n.key === null) return -1;
+        return (m.key - n.key) || (m.i - n.i);
+      });
+      decorated.forEach(function (d, i) { col[i] = d.b; pos[d.b.id] = i; });
+    }
+  }
+
+  // place the columns left to right, stacking cards with a gap
+  const colGap = 96;
+  const rowGap = 34;
+  const cardW = 212;
+  const heights = columns.map(function (col) {
+    return col.reduce(function (sum, b) { return sum + blockRect(b).h; }, 0) + rowGap * Math.max(0, col.length - 1);
+  });
+  const tallest = Math.max.apply(null, heights);
+  let x = 0;
+  columns.forEach(function (col, ci) {
+    let y = (tallest - heights[ci]) / 2;
+    for (const b of col) {
+      b.x = Math.round(x);
+      b.y = Math.round(y);
+      y += blockRect(b).h + rowGap;
+    }
+    x += cardW + colGap;
+  });
+  saveSoon();
+  recompute();
+  canvasView.fit();
+  toast('Blocks arranged in flow order.');
+}
+
 function deleteBlock(id) {
   model.blocks = model.blocks.filter(function (b) { return b.id !== id; });
   model.wires = model.wires.filter(function (w) { return w.from !== id && w.to !== id; });
+  if (focusId === id) {
+    focusId = null;
+    renderFocusBar();
+  }
   saveSoon();
   recompute();
   renderSettings(null);
@@ -240,6 +431,8 @@ function recompute() {
   canvasView.render();
   renderSensitivity(evalResult);
   renderIssues(evalResult);
+  renderFocusBar();
+  updateCompactButton();
   els.hint.style.display = model.blocks.length ? 'none' : '';
 }
 
@@ -358,6 +551,10 @@ function settingsHtml(block) {
     html += field('Display unit', '<input type="text" list="unitList" data-field="displayUnit" value="' + escapeHtml(block.displayUnit || '') + '" placeholder="leave empty to infer" spellcheck="false"><datalist id="unitList">' + COMMON_UNITS.map(function (u) { return '<option value="' + escapeHtml(u) + '">'; }).join('') + '</datalist>');
     html += '<div class="field-hint">Optional. Show the result in a unit of the same kind, for example <code>hrs</code> instead of <code>min</code>.</div>';
   }
+  html += '<div class="field-row">' +
+    '<button type="button" class="btn" data-focusbranch="1" title="Show only this block and everything it is built from">Focus this branch</button>' +
+    '<button type="button" class="btn" data-collapsecard="1" title="Shrink this card to a mini overview, or expand it again">' + (block.collapsed ? 'Expand card' : 'Collapse card') + '</button>' +
+    '</div>';
   html += '<button type="button" class="btn btn-danger" data-delete="1">Delete block</button>';
   return html;
 }
@@ -408,6 +605,19 @@ function bindSettings(block) {
       removeOpInput(block, Number(btn.getAttribute('data-removeterm')));
     });
   });
+  const focusBranch = body.querySelector('[data-focusbranch]');
+  if (focusBranch) {
+    focusBranch.addEventListener('click', function () {
+      setFocus(block.id);
+    });
+  }
+  const collapseCard = body.querySelector('[data-collapsecard]');
+  if (collapseCard) {
+    collapseCard.addEventListener('click', function () {
+      toggleCollapse(block.id);
+      renderSettings(block.id);
+    });
+  }
   const del = body.querySelector('[data-delete]');
   if (del) {
     del.addEventListener('click', function () {
@@ -537,6 +747,12 @@ document.getElementById('btnZoomFit').addEventListener('click', function () { ca
 document.getElementById('btnZoomIn').addEventListener('click', function () { canvasView.zoomBy(1.22); });
 document.getElementById('btnZoomOut').addEventListener('click', function () { canvasView.zoomBy(1 / 1.22); });
 document.getElementById('btnZoomReset').addEventListener('click', function () { canvasView.resetZoom(); });
+document.getElementById('btnArrange').addEventListener('click', function () { autoArrange(); });
+document.getElementById('btnCompact').addEventListener('click', function () {
+  const anyExpanded = model.blocks.some(function (b) { return !b.collapsed; });
+  setAllCollapsed(anyExpanded);
+});
+document.getElementById('btnShowAll').addEventListener('click', function () { setFocus(null); });
 
 document.getElementById('btnExportJson').addEventListener('click', function () {
   exportJson(model);
@@ -590,6 +806,10 @@ window.addEventListener('keydown', function (e) {
     }
   }
   if (e.key === 'Escape') {
+    if (focusId) {
+      setFocus(null);
+      return;
+    }
     canvasView.clearSelection();
     renderSettings(null);
     closeSheets();

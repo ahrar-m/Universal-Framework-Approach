@@ -27,7 +27,7 @@ globalThis.HTMLElement = win.HTMLElement;
 let passed = 0;
 const failures = [];
 function ok(name, cond, extra) {
-  if (cond) { passed++; return; }
+  if (cond) { passed++; if (process.env.SMOKE_VERBOSE) console.log('  ok   ' + name); return; }
   failures.push(name + (extra ? ' -> ' + extra : ''));
 }
 
@@ -145,6 +145,59 @@ const wiresWithC = (svg.innerHTML.match(/data-wire=/g) || []).length;
 clickSel(doc.querySelector('#settingsBody [data-removeterm="2"]'));
 ok('removing an input drops its port and wire', !port(mulId, 'c') && (svg.innerHTML.match(/data-wire=/g) || []).length === wiresWithC - 1, String((svg.innerHTML.match(/data-wire=/g) || []).length));
 ok('value returns after removing the term', doc.getElementById('sensitivityBody').innerHTML.indexOf('$50,000') >= 0, doc.getElementById('sensitivityBody').innerHTML.slice(0, 200));
+
+// ---- forgiving wiring, card folding, layout helpers, focus view
+ok('cards offer a focus button', !!svg.querySelector('g[data-block="' + ids[0] + '"] [data-focus]'));
+ok('cards offer a collapse button', !!svg.querySelector('g[data-block="' + ids[0] + '"] [data-collapse]'));
+
+function pressSvgButton(sel) {
+  const el = svg.querySelector(sel);
+  ok('button present ' + sel, !!el);
+  if (!el) return;
+  firePointer(el, 'pointerdown', 320, 320);
+  // the canvas re-renders on pointerdown, so release on the live node
+  firePointer(svg.querySelector(sel), 'pointerup', 320, 320);
+}
+function cardHeight(id) {
+  const g = svg.querySelector('g[data-block="' + id + '"]');
+  return Number(g.querySelector('rect').getAttribute('height'));
+}
+
+pressSvgButton('g[data-block="' + ids[0] + '"] [data-collapse]');
+ok('collapse shrinks the card', cardHeight(ids[0]) === 54, String(cardHeight(ids[0])));
+pressSvgButton('g[data-block="' + ids[0] + '"] [data-collapse]');
+ok('expand restores the card', cardHeight(ids[0]) > 100, String(cardHeight(ids[0])));
+
+clickSel(doc.getElementById('btnCompact'));
+ok('compact shrinks every card', groups().every(function (g) { return Number(g.querySelector('rect').getAttribute('height')) === 54; }));
+clickSel(doc.getElementById('btnCompact'));
+ok('expand restores every card', groups().every(function (g) { return Number(g.querySelector('rect').getAttribute('height')) > 100; }));
+
+clickSel(doc.getElementById('btnArrange'));
+function cardX(id) {
+  const t = svg.querySelector('g[data-block="' + id + '"]').getAttribute('transform') || '';
+  return Number(t.replace('translate(', '').split(' ')[0]);
+}
+ok('arrange orders the flow left to right', cardX(ids[0]) < cardX(ids[2]) && cardX(ids[2]) < cardX(ids[3]), [cardX(ids[0]), cardX(ids[2]), cardX(ids[3])].join(','));
+
+// dropping a loose wire on a card body wires it to that card's first free input
+palette('op');
+const extraId = groups()[groups().length - 1].getAttribute('data-block');
+const wiresBefore = (svg.innerHTML.match(/data-wire=/g) || []).length;
+firePointer(port(ids[0], 'out'), 'pointerdown', 400, 400);
+firePointer(svg.querySelector('g[data-block="' + extraId + '"]'), 'pointerup', 400, 400);
+ok('drop on a card body wires it up', (svg.innerHTML.match(/data-wire=/g) || []).length === wiresBefore + 1, String((svg.innerHTML.match(/data-wire=/g) || []).length));
+firePointer(svg.querySelector('g[data-block="' + extraId + '"]'), 'pointerdown', 420, 420);
+firePointer(svg.querySelector('g[data-block="' + extraId + '"]'), 'pointerup', 420, 420);
+win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+ok('scratch block removed again', groups().length === 4, String(groups().length));
+
+// focus: open one block with everything it is built from
+pressSvgButton('g[data-block="' + ids[2] + '"] [data-focus]');
+ok('focus shows only the branch', groups().length === 3, String(groups().length));
+ok('focus banner is shown', doc.getElementById('focusBar').hidden === false && doc.getElementById('focusLabel').textContent.indexOf('Focused on') === 0, doc.getElementById('focusLabel').textContent);
+clickSel(doc.getElementById('btnShowAll'));
+ok('show all restores the model', groups().length === 4, String(groups().length));
 
 // formula block with named inputs
 palette('formula');

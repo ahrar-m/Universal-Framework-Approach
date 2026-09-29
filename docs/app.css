@@ -162,9 +162,23 @@ body {
 .stage-hint strong { display: block; color: var(--text); margin-bottom: 4px; }
 .stage-hint em { font-style: normal; color: var(--accent); }
 .zoom-controls {
-  position: absolute; right: 14px; bottom: 14px; display: flex; gap: 6px;
+  position: absolute; right: 14px; bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap;
+  justify-content: flex-end; max-width: calc(100% - 28px);
 }
 .zoom-controls .btn { background: rgba(18, 26, 46, 0.9); }
+.btn.active { border-color: var(--accent); color: var(--accent); }
+
+/* focus view banner */
+.focus-bar {
+  position: absolute; left: 14px; top: 14px; z-index: 5;
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(18, 26, 46, 0.92); border: 1px solid var(--line-strong);
+  border-radius: 11px; padding: 7px 8px 7px 13px; max-width: min(80%, 560px);
+}
+.focus-bar span {
+  color: var(--text); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.focus-bar[hidden] { display: none; }
 
 /* settings form */
 .field { margin-bottom: 12px; }

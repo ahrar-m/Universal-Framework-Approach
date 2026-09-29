@@ -13,7 +13,9 @@ tool tells you **which input actually drives the result**.
 
 | Capability | Detail |
 | --- | --- |
-| Drag-and-connect canvas | Blocks are cards with ports; wires carry values; works with mouse and touch (tap a port, then tap the destination) |
+| Forgiving wiring | Blocks are cards with ports and wires carry values. Wires <strong>magnetise to the nearest legal port</strong> as you drag, dropping a wire anywhere on a card uses that card's first free input (growing a new one on Add/Multiply when needed), and touch works by tap-a-port-then-tap-the-card. Compatible ports glow while a link is being made |
+| Auto-arrange | <code>Arrange</code> lays the blocks out in flow order &mdash; value inputs on the left, the result on the right, columns ordered to keep wires short and crossings few |
+| Compact cards and focus view | <code>Compact</code> (or the card's <code>&#8722;</code> button) shrinks cards to a mini name-and-value overview so a whole model fits on one screen; the target button on a card &mdash; or <code>Focus this branch</code> in Block settings &mdash; opens one block with everything it is built from, on its own |
 | Four block types | **Value input** (named number, unit, optional min/likely/max), **Operation** (add, subtract, multiply, divide, power, min, max, round, percent-of), **Formula** (typed expression over named inputs), **Result** (final outcome, optional display unit) |
 | Endless operation inputs | **Add, Multiply, Min and Max take any number of inputs** &mdash; grow or shrink the list with the block's <code>+ add input</code> row or the <code>Add input</code> button in Block settings. Empty ports are ignored, one connected input passes straight through, and every term is unit-checked. Subtract, Divide, Power, Round and Percent of keep their two ports |
 | Dimensional unit checking | Add/subtract require the same kind of quantity; multiply/divide combine units (`$/unit × units → $`); percentages scale without changing the unit; compatible units convert automatically (`30 min + 1 hr → 90 min`); incompatible mixes are refused in plain language |

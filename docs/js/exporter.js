@@ -24,8 +24,13 @@ export function buildSvgString(svgEl, model, opts) {
   const options = opts || {};
   const pad = options.padding === undefined ? 48 : options.padding;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  if (model.blocks.length) {
-    for (const b of model.blocks) {
+  // when a focus view is open, only the blocks on screen are exported
+  const shown = {};
+  for (const el of svgEl.querySelectorAll('g[data-block]')) shown[el.getAttribute('data-block')] = true;
+  const shownBlocks = model.blocks.filter(function (b) { return shown[b.id]; });
+  const forBounds = shownBlocks.length ? shownBlocks : model.blocks;
+  if (forBounds.length) {
+    for (const b of forBounds) {
       const r = blockRect(b);
       minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
       maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
@@ -38,6 +43,10 @@ export function buildSvgString(svgEl, model, opts) {
   const height = Math.round(maxY - minY);
 
   const clone = svgEl.cloneNode(true);
+  // the on-canvas fold and focus buttons are interaction aids, not part of the drawing
+  for (const btn of Array.from(clone.querySelectorAll('[data-focus], [data-collapse]'))) {
+    if (btn.parentNode) btn.parentNode.removeChild(btn);
+  }
   const viewport = clone.querySelector('#viewport');
   if (viewport) viewport.setAttribute('transform', 'translate(0 0) scale(1)');
   // background sized to the model bbox

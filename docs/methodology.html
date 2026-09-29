@@ -308,6 +308,21 @@
   <li><strong>Each wire shows what it carries.</strong> You can follow a number from the input that produced it, through every intermediate step, to the result.</li>
 </ul>
 
+<h2>Wiring without the fiddling</h2>
+<p>Connecting two blocks should not take three attempts. Three shortcuts make a link hard to miss:</p>
+<ul>
+  <li><strong>Wires magnetise to ports.</strong> Drag from a port towards the next block &mdash; well before you reach it, the wire snaps to the nearest port it is allowed to reach and lights it up. Release anywhere in that area and the link is made.</li>
+  <li><strong>Drop the wire on the card itself.</strong> Let go anywhere on a block and the wire lands on that block's first free input &mdash; or on its output when you drag from an input. On an Add or Multiply block whose inputs are all filled, a fresh input is grown for the wire.</li>
+  <li><strong>Tap, then tap.</strong> On touch: tap the output port, then tap the destination card or its port. While you decide, every port that can accept the link glows; tapping the same port again abandons the link.</li>
+</ul>
+
+<h2>Keeping large models readable</h2>
+<ul>
+  <li><strong>Arrange</strong> lays the blocks out in flow order: value inputs on the left, the result on the right, and columns ordered so wires stay short and crossings few. You can still drag any block afterwards &mdash; the layout is a starting point, not a lock.</li>
+  <li><strong>Compact</strong> shrinks every card to a mini overview that keeps the name and the live value, so a whole model fits on one screen; press it again to restore. The <code>&#8722;</code> button on a single card shrinks just that card and the <code>+</code> button expands it again, so you can mix overview and detail freely.</li>
+  <li><strong>Focus</strong> &mdash; the target button on a card, or <code>Focus this branch</code> in Block settings &mdash; opens one block together with everything it is built from, on its own. This is how to work inside a large block with many sub-connections without the rest of the model in the way. <code>Show whole model</code> in the banner, or <code>Esc</code>, leaves the focus view.</li>
+</ul>
+
 <h2>Units and dimensional checking</h2>
 <p>The engine tracks what kind of quantity every number is, and it checks every combination before it computes:</p>
 <ul>
@@ -381,6 +396,8 @@
   <li><strong>New here, or just exploring?</strong> The <strong>Blocks palette</strong> has ready-made examples &mdash; <code>Monthly profit</code>, <code>Line efficiency</code> and <code>Design score</code>. Load one, change the numbers, rewire it; nothing is locked.</li>
   <li><strong>Formulas resolve names from their own Inputs list.</strong> If an expression cannot find a name, that name is missing from the block's <code>Inputs</code>; add it with <code>Add input</code> and wire a value into it.</li>
   <li><strong>The model autosaves in your browser</strong> (localStorage), so closing the tab does not lose your work. <code>Export JSON</code> and <code>Import JSON</code> move a model between devices. <code>Clear data</code> in the toolbar deletes everything this site stored in your browser.</li>
+  <li><strong>Wiring does not need pixel precision.</strong> A wire snaps to the nearest legal port and a link dropped on a card uses its first free input &mdash; if a connection is refused, the message says why (a loop, a second output, or a unit clash).</li>
+  <li><strong>Big model? Use <code>Arrange</code>, <code>Compact</code> and <code>Focus</code>.</strong> Arrange sorts the blocks into flow order, Compact turns them into a one-screen overview, and Focus opens one block with its own inputs.</li>
   <li><strong>Choose the export for the job.</strong> <code>Export SVG</code> stays crisp when zoomed &mdash; use it for print and slides &mdash; while <code>Export PNG</code> is a 3x raster for places that only accept images.</li>
 </ul>
 

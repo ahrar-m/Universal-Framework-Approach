@@ -11,6 +11,7 @@ export const TYPE_META = {
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const SANS = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+const LINK = '#6ea8fe';
 
 function esc(text) {
   return String(text === undefined || text === null ? '' : text)
@@ -41,24 +42,33 @@ function trunc(text, n) {
 export function blockGeometry(block) {
   const ports = blockPorts(block);
   const w = 212;
+  if (block.collapsed) {
+    // mini card: header only, value inline — for overview layouts
+    return { w: w, h: 54, headerH: 54, rowH: 0, footerH: 0, rows: 0, ports: ports, addRow: 0, collapsed: true };
+  }
   const headerH = 42;
   const rowH = 27;
   const footerH = block.type === 'result' ? 58 : block.type === 'formula' ? 52 : 42;
   const addRow = block.type === 'op' && isVariadicOp(block.op) ? 1 : 0;
   const rows = Math.max(1, ports.length) + addRow;
   const h = headerH + rows * rowH + footerH;
-  return { w: w, h: h, headerH: headerH, rowH: rowH, footerH: footerH, rows: rows, ports: ports, addRow: addRow };
+  return { w: w, h: h, headerH: headerH, rowH: rowH, footerH: footerH, rows: rows, ports: ports, addRow: addRow, collapsed: false };
+}
+
+// Vertical position (inside the card) of the i-th input port.
+function portLocalY(g, index) {
+  if (g.collapsed) {
+    const n = Math.max(1, g.ports.length);
+    return 9 + (Math.max(0, index) + 0.5) * (g.h - 18) / n;
+  }
+  return g.headerH + index * g.rowH + g.rowH / 2;
 }
 
 export function portPoint(block, portId) {
   const g = blockGeometry(block);
   const idx = g.ports.findIndex(function (p) { return p.id === portId; });
-  if (idx < 0) return { x: block.x + g.w / 2, y: block.y + g.h / 2, dir: 'in' };
-  return {
-    x: block.x,
-    y: block.y + g.headerH + idx * g.rowH + g.rowH / 2,
-    dir: 'in'
-  };
+  if (idx < 0 && !g.collapsed) return { x: block.x + g.w / 2, y: block.y + g.h / 2, dir: 'in' };
+  return { x: block.x, y: block.y + portLocalY(g, idx < 0 ? 0 : idx), dir: 'in' };
 }
 
 export function outPoint(block) {
@@ -69,6 +79,19 @@ export function outPoint(block) {
 export function blockRect(block) {
   const g = blockGeometry(block);
   return { x: block.x, y: block.y, w: g.w, h: g.h };
+}
+
+// Every anchor a wire can start or end on, in world coordinates.
+export function portAnchors(block) {
+  const g = blockGeometry(block);
+  const list = [];
+  for (let i = 0; i < g.ports.length; i++) {
+    list.push({ blockId: block.id, portId: g.ports[i].id, dir: 'in', x: block.x, y: block.y + portLocalY(g, i) });
+  }
+  if (blockHasOutput(block)) {
+    list.push({ blockId: block.id, portId: 'out', dir: 'out', x: block.x + g.w, y: block.y + g.h / 2 });
+  }
+  return list;
 }
 
 function wirePath(a, b) {
@@ -82,12 +105,25 @@ export function createCanvas(opts) {
   const pointers = new Map();
   let gesture = null;
   let pinch = null;
-  let pending = null;      // { blockId, portId, dir } awaiting a second tap
+  let pending = null;      // { blockId, portId, dir } awaiting a second tap or a drop
   let tempWire = null;     // { from, to: {x, y} }
+  let snapTarget = null;   // { blockId, portId, dir, x, y } the wire is magnetised to
   let selection = null;    // { kind: 'block' | 'wire', id }
 
   function model() { return opts.getModel(); }
   function values() { return opts.getValues() || {}; }
+
+  function visibleIds() { return opts.getVisibleIds ? opts.getVisibleIds() : null; }
+  function visibleBlocks() {
+    const m = model();
+    const vis = visibleIds();
+    return vis ? m.blocks.filter(function (b) { return vis.has(b.id); }) : m.blocks;
+  }
+  function visibleWires() {
+    const m = model();
+    const vis = visibleIds();
+    return vis ? m.wires.filter(function (w) { return vis.has(w.from) && vis.has(w.to); }) : m.wires;
+  }
 
   function svgSize() {
     const r = svg.getBoundingClientRect();
@@ -120,7 +156,7 @@ export function createCanvas(opts) {
     parts.push('<g id="viewport" transform="translate(' + view.x + ' ' + view.y + ') scale(' + view.k + ')">');
 
     // wires first
-    for (const w of m.wires) {
+    for (const w of visibleWires()) {
       const from = m.blocks.find(function (b) { return b.id === w.from; });
       const to = m.blocks.find(function (b) { return b.id === w.to; });
       if (!from || !to) continue;
@@ -143,18 +179,24 @@ export function createCanvas(opts) {
     }
 
     // blocks
-    for (const block of m.blocks) {
+    for (const block of visibleBlocks()) {
       parts.push(renderBlock(block, vals[block.id]));
     }
 
     // temp wire
-    if (tempWire) {
-      const from = m.blocks.find(function (b) { return b.id === tempWire.from.blockId; });
+    if (tempWire && pending) {
+      const from = m.blocks.find(function (b) { return b.id === pending.blockId; });
       if (from) {
-        const a = tempWire.from.dir === 'out' ? outPoint(from) : portPoint(from, tempWire.from.portId);
-        const d = wirePath(a, tempWire.to);
-        parts.push('<path d="' + d + '" fill="none" stroke="#6ea8fe" stroke-width="2.4" stroke-dasharray="7 6" stroke-linecap="round" />');
-        parts.push('<circle cx="' + tempWire.to.x + '" cy="' + tempWire.to.y + '" r="7" fill="none" stroke="#6ea8fe" stroke-width="2" />');
+        const a = pending.dir === 'out' ? outPoint(from) : portPoint(from, pending.portId);
+        const to = snapTarget ? { x: snapTarget.x, y: snapTarget.y } : tempWire.to;
+        const d = wirePath(a, to);
+        parts.push('<path d="' + d + '" fill="none" stroke="' + LINK + '" stroke-width="2.4" stroke-dasharray="7 6" stroke-linecap="round" />');
+        if (snapTarget) {
+          parts.push('<circle cx="' + to.x + '" cy="' + to.y + '" r="12" fill="rgba(110,168,254,0.16)" stroke="' + LINK + '" stroke-width="2.2" />');
+          parts.push('<circle cx="' + to.x + '" cy="' + to.y + '" r="4" fill="' + LINK + '" />');
+        } else {
+          parts.push('<circle cx="' + to.x + '" cy="' + to.y + '" r="7" fill="none" stroke="' + LINK + '" stroke-width="2" />');
+        }
       }
     }
 
@@ -172,6 +214,30 @@ export function createCanvas(opts) {
       '<stop offset="0%" stop-color="#12263a" /><stop offset="100%" stop-color="#123028" />' +
       '</linearGradient>' +
       '</defs>';
+  }
+
+  // While a link is being made, ports that can accept it glow.
+  function portLinkable(blockId, dir) {
+    if (!pending) return false;
+    if (pending.blockId === blockId) return false;
+    return pending.dir !== dir;
+  }
+
+  function headerButtons(block, g) {
+    const out = [];
+    const cy = 16;
+    const focusX = g.collapsed ? g.w - 38 : g.w - 64;
+    const foldX = g.collapsed ? g.w - 14 : g.w - 38;
+    out.push('<g data-focus="1" data-btnblock="' + esc(block.id) + '" style="cursor:pointer"><title>Open this block and everything it is built from</title>' +
+      '<circle cx="' + focusX + '" cy="' + cy + '" r="11" fill="rgba(110,168,254,0.14)" stroke="rgba(110,168,254,0.38)" />' +
+      '<circle cx="' + focusX + '" cy="' + cy + '" r="4.2" fill="none" stroke="' + LINK + '" stroke-width="1.6" pointer-events="none" />' +
+      '<circle cx="' + focusX + '" cy="' + cy + '" r="1.6" fill="' + LINK + '" pointer-events="none" /></g>');
+    out.push('<g data-collapse="1" data-btnblock="' + esc(block.id) + '" style="cursor:pointer"><title>' + (block.collapsed ? 'Expand this card' : 'Shrink this card') + '</title>' +
+      '<circle cx="' + foldX + '" cy="' + cy + '" r="11" fill="rgba(110,168,254,0.14)" stroke="rgba(110,168,254,0.38)" />' +
+      '<rect x="' + (foldX - 4.5) + '" y="' + (cy - 1) + '" width="9" height="2" rx="1" fill="' + LINK + '" pointer-events="none" />' +
+      (block.collapsed ? '<rect x="' + (foldX - 1) + '" y="' + (cy - 4.5) + '" width="2" height="9" rx="1" fill="' + LINK + '" pointer-events="none" />' : '') +
+      '</g>');
+    return out;
   }
 
   function renderBlock(block, val) {
@@ -196,16 +262,40 @@ export function createCanvas(opts) {
     // header text
     out.push('<text x="14" y="22" font-family="' + MONO + '" font-size="9.5" letter-spacing="1.6" fill="' + meta.color + '" opacity="0.95">' + meta.label + '</text>');
     const title = blockTitle(block);
-    out.push('<text x="14" y="' + (block.type === 'input' ? 38 : 38) + '" font-family="' + SANS + '" font-size="14.5" font-weight="600" fill="#eef3ff">' + esc(trunc(title, 24)) + '</text>');
+    out.push('<text x="14" y="' + (g.collapsed ? 42 : 38) + '" font-family="' + SANS + '" font-size="' + (g.collapsed ? 13.5 : 14.5) + '" font-weight="600" fill="#eef3ff">' + esc(trunc(title, g.collapsed ? 18 : 24)) + '</text>');
+
+    if (g.collapsed) {
+      // mini card: value inline, ports as small edge dots, fold + focus buttons
+      const display = val ? (val.error ? shortError(val.error) : val.display) : '—';
+      const valueColor = hasError ? '#fc8181' : (block.type === 'result' ? '#68d391' : '#eaf1ff');
+      out.push('<text x="' + (g.w - 12) + '" y="42" text-anchor="end" font-family="' + MONO + '" font-size="12.5" font-weight="600" fill="' + valueColor + '">' + esc(trunc(display, 13)) + '</text>');
+      for (let i = 0; i < g.ports.length; i++) {
+        const py = portLocalY(g, i);
+        out.push('<circle cx="0" cy="' + py + '" r="15" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="' + esc(g.ports[i].id) + '" data-dir="in" style="cursor:crosshair" />');
+        out.push('<circle cx="0" cy="' + py + '" r="4" fill="#0b1226" stroke="' + meta.color + '" stroke-width="1.8" pointer-events="none" />');
+        if (portLinkable(block.id, 'in')) out.push('<circle cx="0" cy="' + py + '" r="9" fill="none" stroke="' + LINK + '" stroke-opacity="0.55" stroke-width="1.6" pointer-events="none" />');
+      }
+      if (blockHasOutput(block)) {
+        const oy = g.h / 2;
+        out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="15" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="out" data-dir="out" style="cursor:crosshair" />');
+        out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="4" fill="#0b1226" stroke="' + meta.color + '" stroke-width="1.8" pointer-events="none" />');
+        if (portLinkable(block.id, 'out')) out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="9" fill="none" stroke="' + LINK + '" stroke-opacity="0.55" stroke-width="1.6" pointer-events="none" />');
+      }
+      if (hasError) out.push('<title>' + esc(val.error) + '</title>');
+      out.push(headerButtons(block, g).join(''));
+      out.push('</g>');
+      return out.join('');
+    }
 
     // port rows
     for (let i = 0; i < g.ports.length; i++) {
       const p = g.ports[i];
       const py = g.headerH + i * g.rowH + g.rowH / 2;
       out.push('<text x="18" y="' + (py + 4) + '" font-family="' + MONO + '" font-size="11.5" fill="#9db1d8">' + esc(trunc(p.label, 16)) + '</text>');
-      out.push('<circle cx="0" cy="' + py + '" r="13" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="' + esc(p.id) + '" data-dir="in" style="cursor:crosshair" />');
+      out.push('<circle cx="0" cy="' + py + '" r="21" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="' + esc(p.id) + '" data-dir="in" style="cursor:crosshair" />');
       out.push('<circle cx="0" cy="' + py + '" r="5.5" fill="#0b1226" stroke="' + meta.color + '" stroke-width="2" pointer-events="none" />');
       out.push('<circle cx="0" cy="' + py + '" r="2" fill="' + meta.color + '" pointer-events="none" />');
+      if (portLinkable(block.id, 'in')) out.push('<circle cx="0" cy="' + py + '" r="12" fill="none" stroke="' + LINK + '" stroke-opacity="0.55" stroke-width="2" pointer-events="none" />');
     }
 
     // add-input affordance for operations that take any number of inputs
@@ -218,9 +308,10 @@ export function createCanvas(opts) {
     // output port
     if (blockHasOutput(block)) {
       const oy = g.h / 2;
-      out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="13" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="out" data-dir="out" style="cursor:crosshair" />');
+      out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="21" fill="transparent" data-port="1" data-block="' + esc(block.id) + '" data-portid="out" data-dir="out" style="cursor:crosshair" />');
       out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="5.5" fill="#0b1226" stroke="' + meta.color + '" stroke-width="2" pointer-events="none" />');
       out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="2" fill="' + meta.color + '" pointer-events="none" />');
+      if (portLinkable(block.id, 'out')) out.push('<circle cx="' + g.w + '" cy="' + oy + '" r="12" fill="none" stroke="' + LINK + '" stroke-opacity="0.55" stroke-width="2" pointer-events="none" />');
     }
 
     // footer value
@@ -252,6 +343,7 @@ export function createCanvas(opts) {
       out.push('<text x="' + (g.w - 14) + '" y="20" text-anchor="middle" font-family="' + SANS + '" font-size="12" font-weight="700" fill="#2a0b0b">!</text></g>');
       out.push('<title>' + esc(val.error) + '</title>');
     }
+    out.push(headerButtons(block, g).join(''));
     out.push('</g>');
     return out.join('');
   }
@@ -275,10 +367,66 @@ export function createCanvas(opts) {
       if (wire) return { kind: 'wire', id: wire.getAttribute('data-wire') };
       const add = el.closest('[data-addterm]');
       if (add) return { kind: 'addterm', id: add.getAttribute('data-block') };
+      const focus = el.closest('[data-focus]');
+      if (focus) return { kind: 'focus', id: focus.getAttribute('data-btnblock') };
+      const fold = el.closest('[data-collapse]');
+      if (fold) return { kind: 'collapse', id: fold.getAttribute('data-btnblock') };
       const block = el.closest('[data-block]');
       if (block) return { kind: 'block', id: block.getAttribute('data-block') };
     }
     return { kind: 'empty' };
+  }
+
+  // Magnetise the loose wire end to the nearest port it can legally land on,
+  // so a connection never needs pixel precision.
+  function updateSnap(pt, e) {
+    snapTarget = null;
+    const from = pending;
+    if (!from) return;
+    const radius = 52 / view.k;
+    let best = null;
+    let bestD = radius;
+    for (const b of visibleBlocks()) {
+      for (const a of portAnchors(b)) {
+        if (a.blockId === from.blockId || a.dir === from.dir) continue;
+        const d = Math.hypot(a.x - pt.x, a.y - pt.y);
+        if (d < bestD) { bestD = d; best = a; }
+      }
+    }
+    if (best) {
+      snapTarget = { blockId: best.blockId, portId: best.portId, dir: best.dir, x: best.x, y: best.y };
+      return;
+    }
+    // nothing close: preview a drop straight onto a card, which uses its first free input
+    if (e && opts.previewTarget) {
+      const hit = hitTarget(e);
+      if (hit.kind === 'block' && hit.id !== from.blockId) {
+        const target = model().blocks.find(function (b) { return b.id === hit.id; });
+        const portId = opts.previewTarget(from.blockId, from.portId, from.dir, hit.id);
+        if (target && portId) {
+          const p = portId === 'out' ? outPoint(target) : portPoint(target, portId);
+          snapTarget = { blockId: target.id, portId: portId, dir: portId === 'out' ? 'out' : 'in', x: p.x, y: p.y };
+        }
+      }
+    }
+  }
+
+  function finishLink(hit) {
+    const from = pending;
+    if (!from) return false;
+    if (hit && hit.kind === 'port' && hit.blockId !== from.blockId) {
+      opts.connect(from.blockId, from.portId, from.dir, hit.blockId, hit.portId, hit.dir);
+    } else if (snapTarget && snapTarget.blockId !== from.blockId) {
+      opts.connect(from.blockId, from.portId, from.dir, snapTarget.blockId, snapTarget.portId, snapTarget.dir);
+    } else if (hit && hit.kind === 'block' && hit.id !== from.blockId && opts.connectAuto) {
+      opts.connectAuto(from.blockId, from.portId, from.dir, hit.id);
+    } else {
+      return false;
+    }
+    pending = null;
+    tempWire = null;
+    snapTarget = null;
+    return true;
   }
 
   function onDown(e) {
@@ -303,13 +451,41 @@ export function createCanvas(opts) {
         opts.connect(pending.blockId, pending.portId, pending.dir, hit.blockId, hit.portId, hit.dir);
         pending = null;
         tempWire = null;
+        snapTarget = null;
+        gesture = null;
+        render();
+        return;
+      }
+      if (pending && pending.blockId === hit.blockId && pending.portId === hit.portId) {
+        // tapping the very same port again abandons the link
+        pending = null;
+        tempWire = null;
+        snapTarget = null;
         gesture = null;
         render();
         return;
       }
       pending = { blockId: hit.blockId, portId: hit.portId, dir: hit.dir };
       tempWire = { from: pending, to: pt };
+      snapTarget = null;
       gesture = { kind: 'wire' };
+      render();
+      return;
+    }
+    if (pending && hit.kind === 'block' && hit.id !== pending.blockId && opts.connectAuto) {
+      // the loose end drops onto a card: it takes that card's first free input
+      opts.connectAuto(pending.blockId, pending.portId, pending.dir, hit.id);
+      pending = null;
+      tempWire = null;
+      snapTarget = null;
+      gesture = null;
+      render();
+      return;
+    }
+    if (hit.kind === 'focus' || hit.kind === 'collapse') {
+      selection = { kind: 'block', id: hit.id };
+      gesture = { kind: 'button', id: hit.id, action: hit.kind };
+      opts.onSelect(hit.id);
       render();
       return;
     }
@@ -332,6 +508,7 @@ export function createCanvas(opts) {
     gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
     pending = null;
     tempWire = null;
+    snapTarget = null;
   }
 
   function onMove(e) {
@@ -365,6 +542,7 @@ export function createCanvas(opts) {
       opts.onDrag();
     } else if (gesture.kind === 'wire') {
       tempWire.to = clientToCanvas(e.clientX, e.clientY);
+      updateSnap(tempWire.to, e);
       scheduleRender();
     } else if (gesture.kind === 'pan') {
       const dx = e.clientX - gesture.sx;
@@ -385,16 +563,18 @@ export function createCanvas(opts) {
     const kind = gesture.kind;
     if (kind === 'wire') {
       const hit = hitTarget(e);
-      if (pending && hit.kind === 'port' && hit.blockId !== pending.blockId) {
-        opts.connect(pending.blockId, pending.portId, pending.dir, hit.blockId, hit.portId, hit.dir);
+      const linked = finishLink(hit);
+      if (!linked && !isTap) {
         pending = null;
-      } else if (isTap) {
+        tempWire = null;
+      } else if (!linked) {
         // keep pending so the next tap can complete the connection
         tempWire = null;
-      } else {
-        pending = null;
-        tempWire = null;
       }
+      snapTarget = null;
+    } else if (kind === 'button' && isTap) {
+      if (gesture.action === 'collapse' && opts.toggleCollapse) opts.toggleCollapse(gesture.id);
+      else if (gesture.action === 'focus' && opts.setFocus) opts.setFocus(gesture.id);
     } else if (kind === 'pan' && isTap) {
       selection = null;
       opts.onSelect(null);
@@ -433,8 +613,9 @@ export function createCanvas(opts) {
   // ------------------------------------------------------------------- api
   function fit() {
     const m = model();
+    const blocks = visibleBlocks();
     const size = svgSize();
-    if (!m.blocks.length) {
+    if (!blocks.length) {
       view.k = 1;
       view.x = size.w / 2 - 106;
       view.y = size.h / 2 - 60;
@@ -442,7 +623,7 @@ export function createCanvas(opts) {
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const b of m.blocks) {
+    for (const b of blocks) {
       const r = blockRect(b);
       minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
       maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
@@ -484,7 +665,7 @@ export function createCanvas(opts) {
     },
     getSelection: function () { return selection; },
     setSelection: function (s) { selection = s; render(); },
-    clearSelection: function () { selection = null; pending = null; tempWire = null; render(); },
+    clearSelection: function () { selection = null; pending = null; tempWire = null; snapTarget = null; render(); },
     deleteSelection: function () {
       if (!selection) return false;
       if (selection.kind === 'block') opts.deleteBlock(selection.id);
