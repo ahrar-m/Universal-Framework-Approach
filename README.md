@@ -23,7 +23,7 @@ tool tells you **which input actually drives the result**.
 | Live values | Every block and wire shows its current value while you edit |
 | Sensitivity ranking | "What moves the result": inputs ranked by their effect on the final number (min→max swing when a range is given, otherwise a +1% change) |
 | Examples | Three ready-made models — **Monthly profit**, **Line efficiency**, **Design score** — loadable from the Blocks palette to take apart |
-| Export | Crisp vector **SVG**, high-resolution **PNG** (3x), and **JSON** model files in/out |
+| Export | Crisp vector **SVG**, high-resolution **PNG** (3x), and **JSON** model files in/out. Every export is suffixed with a date-timestamp &mdash; e.g. `monthly-profit-20250929-142530.svg` &mdash; so repeated exports never overwrite each other |
 | Clear data | One button deletes everything the site saved in your browser |
 | Persistence | Autosaves to the browser (localStorage); JSON export/import moves models between devices |
 

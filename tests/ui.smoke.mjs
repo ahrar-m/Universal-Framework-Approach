@@ -231,10 +231,25 @@ clickSel(doc.getElementById('btnWireDeselect'));
 ok('deselect closes the wire bar', doc.getElementById('wireBar').hidden === true);
 
 // export path: standalone SVG of the live canvas + saved model
-const { buildSvgString } = await import(pathToFileURL(root + 'docs/js/exporter.js').href);
+const { buildSvgString, exportJson, exportSvg, exportName } = await import(pathToFileURL(root + 'docs/js/exporter.js').href);
 const svgString = buildSvgString(svg, stored);
 ok('svg export is standalone', svgString.indexOf('<?xml') === 0 && svgString.indexOf('viewBox=') > 0, svgString.slice(0, 120));
 ok('svg export sized', /width="[0-9]+"/.test(svgString) && /height="[0-9]+"/.test(svgString));
+
+// export filenames carry a date-timestamp suffix so repeated exports never overwrite
+const downloads = [];
+// jsdom's URL has no object-URL support; the download itself is stubbed out below
+if (!win.URL.createObjectURL) win.URL.createObjectURL = function () { return 'blob:stub'; };
+if (!win.URL.revokeObjectURL) win.URL.revokeObjectURL = function () {};
+const realClick = win.HTMLAnchorElement.prototype.click;
+win.HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
+exportJson(stored);
+exportSvg(svg, stored);
+win.HTMLAnchorElement.prototype.click = realClick;
+const slug = String(stored.name || 'model').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'model';
+ok('json export name is stamped', new RegExp('^' + slug + '-[0-9]{8}-[0-9]{6}\\.ufa\\.json$').test(downloads[0] || ''), downloads[0]);
+ok('svg export name is stamped', new RegExp('^' + slug + '-[0-9]{8}-[0-9]{6}\\.svg$').test(downloads[1] || ''), downloads[1]);
+ok('png export name is stamped', new RegExp('^' + slug + '-[0-9]{8}-[0-9]{6}@3x\\.png$').test(exportName(stored, 'png', 3)), exportName(stored, 'png', 3));
 
 // examples load from the palette
 clickSel(doc.querySelector('.palette-item[data-example="profit"]'));

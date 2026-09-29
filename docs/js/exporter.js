@@ -18,6 +18,22 @@ function safeName(name) {
   return String(name || 'model').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'model';
 }
 
+// Date-timestamp suffix, e.g. 20250929-142530, so repeated exports never overwrite
+// each other and the files sort in the order they were made.
+function timeStamp(date) {
+  const d = date || new Date();
+  const p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' +
+    p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+// Builds the download filename: <model-name>-<date-timestamp>[@<scale>x].<ext>
+export function exportName(model, ext, scale) {
+  let name = safeName(model && model.name) + '-' + timeStamp(new Date());
+  if (scale) name += '@' + scale + 'x';
+  return name + '.' + ext;
+}
+
 // Builds a standalone SVG string of the whole model, in world coordinates,
 // so it stays crisp at any zoom level.
 export function buildSvgString(svgEl, model, opts) {
@@ -82,7 +98,7 @@ export function buildSvgString(svgEl, model, opts) {
 
 export function exportSvg(svgEl, model) {
   const str = buildSvgString(svgEl, model);
-  download(safeName(model.name) + '.svg', new Blob([str], { type: 'image/svg+xml;charset=utf-8' }));
+  download(exportName(model, 'svg'), new Blob([str], { type: 'image/svg+xml;charset=utf-8' }));
 }
 
 export function exportPng(svgEl, model, scale) {
@@ -101,7 +117,7 @@ export function exportPng(svgEl, model, scale) {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     URL.revokeObjectURL(url);
     canvas.toBlob(function (png) {
-      if (png) download(safeName(model.name) + '@' + factor + 'x.png', png);
+      if (png) download(exportName(model, 'png', factor), png);
     }, 'image/png');
   };
   img.onerror = function () {
@@ -112,7 +128,7 @@ export function exportPng(svgEl, model, scale) {
 
 export function exportJson(model) {
   const text = JSON.stringify(model, null, 2);
-  download(safeName(model.name) + '.ufa.json', new Blob([text], { type: 'application/json' }));
+  download(exportName(model, 'ufa.json'), new Blob([text], { type: 'application/json' }));
 }
 
 export function importJson(file, onDone, onError) {
