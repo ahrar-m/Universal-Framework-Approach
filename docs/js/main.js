@@ -20,7 +20,11 @@ const els = {
   fileInput: document.getElementById('fileInput'),
   palette: document.getElementById('palette'),
   side: document.getElementById('side'),
-  scrim: document.getElementById('sheetScrim')
+  scrim: document.getElementById('sheetScrim'),
+  wireBar: document.getElementById('wireBar'),
+  wireLabel: document.getElementById('wireLabel'),
+  btnDeleteWire: document.getElementById('btnDeleteWire'),
+  btnWireDeselect: document.getElementById('btnWireDeselect')
 };
 
 let model = loadModel() || starterModel();
@@ -89,6 +93,7 @@ const canvasView = createCanvas({
       // keep the canvas visible; the settings sheet opens on demand
     }
   },
+  onWireSelect: function (id) { renderWireBar(id); },
   onDrag: function () { saveSoon(); },
   onView: function () {},
   connect: function (fromId, fromPort, fromDir, toId, toPort, toDir) {
@@ -791,6 +796,34 @@ els.fileInput.addEventListener('change', function () {
     toast(message);
   });
   els.fileInput.value = '';
+});
+
+// ---------------------------------------------------- selected-wire bar
+// Touch-friendly wire removal: tapping a wire selects it and this bar offers
+// the delete, since a phone has no Delete key to press.
+function renderWireBar(id) {
+  const wire = id ? model.wires.find(function (w) { return w.id === id; }) : null;
+  const from = wire ? findBlock(wire.from) : null;
+  const to = wire ? findBlock(wire.to) : null;
+  if (!wire || !from || !to) {
+    els.wireBar.hidden = true;
+    return;
+  }
+  els.wireLabel.textContent = blockTitle(from) + ' → ' + blockTitle(to);
+  els.wireBar.hidden = false;
+}
+
+els.btnDeleteWire.addEventListener('click', function () {
+  const sel = canvasView.getSelection();
+  if (!sel || sel.kind !== 'wire') return;
+  canvasView.deleteSelection();
+  renderSettings(null);
+  toast('Wire removed.');
+});
+
+els.btnWireDeselect.addEventListener('click', function () {
+  canvasView.clearSelection();
+  renderSettings(null);
 });
 
 // keyboard

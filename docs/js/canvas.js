@@ -109,6 +109,7 @@ export function createCanvas(opts) {
   let tempWire = null;     // { from, to: {x, y} }
   let snapTarget = null;   // { blockId, portId, dir, x, y } the wire is magnetised to
   let selection = null;    // { kind: 'block' | 'wire', id }
+  let notifiedWire = undefined; // last wire id passed to opts.onWireSelect
 
   function model() { return opts.getModel(); }
   function values() { return opts.getValues() || {}; }
@@ -202,6 +203,17 @@ export function createCanvas(opts) {
 
     parts.push('</g>');
     svg.innerHTML = defs() + parts.join('');
+    notifyWireSelect();
+  }
+
+  // Tell the app which wire (if any) is selected so it can show touch-friendly
+  // controls such as "Delete wire". Fires only when the selection changes.
+  function notifyWireSelect() {
+    if (!opts.onWireSelect) return;
+    const id = selection && selection.kind === 'wire' ? selection.id : null;
+    if (id === notifiedWire) return;
+    notifiedWire = id;
+    opts.onWireSelect(id);
   }
 
   function defs() {

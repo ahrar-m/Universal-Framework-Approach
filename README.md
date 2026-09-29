@@ -13,7 +13,7 @@ tool tells you **which input actually drives the result**.
 
 | Capability | Detail |
 | --- | --- |
-| Forgiving wiring | Blocks are cards with ports and wires carry values. Wires <strong>magnetise to the nearest legal port</strong> as you drag, dropping a wire anywhere on a card uses that card's first free input (growing a new one on Add/Multiply when needed), and touch works by tap-a-port-then-tap-the-card. Compatible ports glow while a link is being made |
+| Forgiving wiring | Blocks are cards with ports and wires carry values. Wires <strong>magnetise to the nearest legal port</strong> as you drag, dropping a wire anywhere on a card uses that card's first free input (growing a new one on Add/Multiply when needed), and touch works by tap-a-port-then-tap-the-card. Compatible ports glow while a link is being made; tap a wire to select it and press <em>Delete wire</em> to remove it &mdash; works on a phone, where there is no Delete key |
 | Auto-arrange | <code>Arrange</code> lays the blocks out in flow order &mdash; value inputs on the left, the result on the right, columns ordered to keep wires short and crossings few |
 | Compact cards and focus view | <code>Compact</code> (or the card's <code>&#8722;</code> button) shrinks cards to a mini name-and-value overview so a whole model fits on one screen; the target button on a card &mdash; or <code>Focus this branch</code> in Block settings &mdash; opens one block with everything it is built from, on its own |
 | Four block types | **Value input** (named number, unit, optional min/likely/max), **Operation** (add, subtract, multiply, divide, power, min, max, round, percent-of), **Formula** (typed expression over named inputs), **Result** (final outcome, optional display unit) |

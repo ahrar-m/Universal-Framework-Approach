@@ -180,6 +180,18 @@ body {
 }
 .focus-bar[hidden] { display: none; }
 
+/* selected-wire bar: touch-friendly wire removal */
+.wire-bar {
+  position: absolute; right: 14px; top: 14px; z-index: 5;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(18, 26, 46, 0.92); border: 1px solid var(--line-strong);
+  border-radius: 11px; padding: 7px 8px 7px 13px; max-width: min(80%, 480px);
+}
+.wire-bar span {
+  color: var(--text); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wire-bar[hidden] { display: none; }
+
 /* settings form */
 .field { margin-bottom: 12px; }
 .field label {

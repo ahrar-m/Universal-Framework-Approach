@@ -214,6 +214,22 @@ const delEvt = new win.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }
 win.dispatchEvent(delEvt);
 ok('delete key removes block', groups().length === 4, String(groups().length));
 
+// touch-friendly wire removal: tap the wire, then the Delete wire button
+const wireEls = Array.from(svg.querySelectorAll('[data-wire]'));
+ok('three wires to choose from', wireEls.length === 3, String(wireEls.length));
+firePointer(wireEls[0], 'pointerdown', 250, 250);
+firePointer(svg.querySelector('[data-wire]'), 'pointerup', 250, 250);
+ok('tapping a wire opens the wire bar', doc.getElementById('wireBar').hidden === false);
+ok('wire bar names the link', doc.getElementById('wireLabel').textContent.indexOf('→') > 0, doc.getElementById('wireLabel').textContent);
+clickSel(doc.getElementById('btnDeleteWire'));
+ok('delete-wire button removes the wire', (svg.innerHTML.match(/data-wire=/g) || []).length === 2, String((svg.innerHTML.match(/data-wire=/g) || []).length));
+ok('wire bar hides after the delete', doc.getElementById('wireBar').hidden === true);
+firePointer(svg.querySelector('[data-wire]'), 'pointerdown', 250, 250);
+firePointer(svg.querySelector('[data-wire]'), 'pointerup', 250, 250);
+ok('wire bar reopens for another wire', doc.getElementById('wireBar').hidden === false);
+clickSel(doc.getElementById('btnWireDeselect'));
+ok('deselect closes the wire bar', doc.getElementById('wireBar').hidden === true);
+
 // export path: standalone SVG of the live canvas + saved model
 const { buildSvgString } = await import(pathToFileURL(root + 'docs/js/exporter.js').href);
 const svgString = buildSvgString(svg, stored);

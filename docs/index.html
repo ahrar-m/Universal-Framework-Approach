@@ -71,6 +71,7 @@
         Drag from the round port on the right of a card towards the next card &mdash; the wire
         magnetises to the nearest port, and dropping it anywhere on a card uses that card's first
         free input. On touch: tap the output port, then tap the destination card or port.
+        To remove a wire, tap it so it lights up, then tap <em>Delete wire</em> &mdash; no keyboard needed on a phone.
         <br><br>
         <strong>Keeping it readable</strong>
         <em>Arrange</em> lays the blocks out in flow order, <em>Compact</em> shrinks every card to a
@@ -88,6 +89,11 @@
       <div class="focus-bar" id="focusBar" hidden>
         <span id="focusLabel"></span>
         <button type="button" id="btnShowAll" class="btn" title="Leave the focus view and show every block">Show whole model</button>
+      </div>
+      <div class="wire-bar" id="wireBar" hidden>
+        <span id="wireLabel"></span>
+        <button type="button" id="btnDeleteWire" class="btn btn-danger" title="Remove the selected wire">Delete wire</button>
+        <button type="button" id="btnWireDeselect" class="btn" title="Leave the wire on the canvas, just deselect it">Deselect</button>
       </div>
       <div class="zoom-controls" aria-hidden="false">
         <button type="button" id="btnArrange" class="btn btn-icon" title="Lay the blocks out in flow order, inputs on the left">Arrange</button>
