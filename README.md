@@ -69,12 +69,16 @@ npm install jsdom          # e.g. in ~/ufa-smoke
 DSH_SMOKE_DIR=~/ufa-smoke node tests/ui.smoke.mjs
 ```
 
-To render a sample model for a visual check (writes `sample.svg` / `sample.png`):
+To render a sample model for a visual check (writes `sample.svg`; convert it to a PNG
+with rsvg-convert or any SVG renderer):
 
 ```bash
 OUT_DIR=~ DSH_SMOKE_DIR=~/ufa-smoke node tests/render-sample.mjs
 rsvg-convert -w 1500 ~/sample.svg -o ~/sample.png
 ```
+
+Set `EXAMPLE=profit`, `EXAMPLE=efficiency` or `EXAMPLE=design` to render one of the
+bundled examples instead of the built-in sample model.
 
 ## Deploying
 
@@ -84,4 +88,18 @@ Every push to `main` publishes `docs/` through GitHub Pages:
 git add -A
 git commit -m "Update site"
 git push
+```
+
+### Keep commits attributed to your account
+
+GitHub links a commit to your account only when the commit's author email is one the
+account owns - a verified email address or your GitHub noreply address
+(`<id>+<username>@users.noreply.github.com`, listed under *Settings -> Emails*).
+A commit pushed with any other address, such as `noreply@users.noreply.github.com`,
+is not linked to anyone and shows up as a separate contributor named **"noreply"**.
+Check the identity before committing:
+
+```bash
+git config user.name     # your display name, e.g. Ahrar Muhammad
+git config user.email    # e.g. 114912814+ahrar-m@users.noreply.github.com
 ```
