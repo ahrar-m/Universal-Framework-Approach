@@ -94,8 +94,8 @@ const canvasView = createCanvas({
     }
   },
   onWireSelect: function (id) { renderWireBar(id); },
-  onDrag: function () { saveSoon(); },
-  onView: function () {},
+  onDrag: function () { cancelArrangeAnim(); saveSoon(); },
+  onView: function () { cancelArrangeAnim(); },
   connect: function (fromId, fromPort, fromDir, toId, toPort, toDir) {
     connectPorts(fromId, fromPort, fromDir, toId, toPort, toDir);
   },
@@ -326,19 +326,95 @@ function autoArrange() {
   });
   const tallest = Math.max.apply(null, heights);
   let x = 0;
+  const targets = {};
   columns.forEach(function (col, ci) {
     let y = (tallest - heights[ci]) / 2;
     for (const b of col) {
-      b.x = Math.round(x);
-      b.y = Math.round(y);
+      targets[b.id] = { x: Math.round(x), y: Math.round(y) };
       y += blockRect(b).h + rowGap;
     }
     x += cardW + colGap;
   });
-  saveSoon();
-  recompute();
-  canvasView.fit();
-  toast('Blocks arranged in flow order.');
+  // glide the cards (and the camera) to the new layout instead of snapping
+  animateToTargets(targets, function () {
+    saveSoon();
+    recompute();
+    toast('Blocks arranged in flow order.');
+  });
+}
+
+// ------------------------------------------------------------- animation
+// Arrange moves blocks by animating them: every card and the camera travel to
+// the new layout together, so nothing jumps. A drag, a zoom, or any model
+// change stops the glide where it is, and `prefers-reduced-motion` skips it.
+let arrangeAnim = null;
+const ARRANGE_MS = 600;
+
+function prefersReducedMotion() {
+  try {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch (err) {
+    return false;
+  }
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function cancelArrangeAnim() {
+  if (!arrangeAnim) return;
+  const caf = window.cancelAnimationFrame;
+  if (arrangeAnim.raf && typeof caf === 'function') caf.call(window, arrangeAnim.raf);
+  arrangeAnim = null;
+}
+
+function animateToTargets(targets, done) {
+  cancelArrangeAnim();
+  const moves = [];
+  for (const b of model.blocks) {
+    const t = targets[b.id];
+    if (!t) continue;
+    moves.push({ block: b, fromX: b.x, fromY: b.y, toX: t.x, toY: t.y });
+  }
+  const viewFrom = canvasView.getView();
+  const viewTo = canvasView.fitView(targets);
+  const settle = function () {
+    for (const m of moves) {
+      m.block.x = m.toX;
+      m.block.y = m.toY;
+    }
+    canvasView.setView(viewTo);
+    arrangeAnim = null;
+    if (done) done();
+  };
+  const raf = window.requestAnimationFrame;
+  if (prefersReducedMotion() || typeof raf !== 'function') {
+    settle();
+    return;
+  }
+  // start from the first frame's own clock, so no two time origins mix
+  let start = null;
+  const step = function (now) {
+    if (start === null) start = now;
+    const t = Math.min(1, Math.max(0, (now - start) / ARRANGE_MS));
+    const e = easeInOutCubic(t);
+    for (const m of moves) {
+      m.block.x = Math.round(m.fromX + (m.toX - m.fromX) * e);
+      m.block.y = Math.round(m.fromY + (m.toY - m.fromY) * e);
+    }
+    canvasView.setView({
+      x: viewFrom.x + (viewTo.x - viewFrom.x) * e,
+      y: viewFrom.y + (viewTo.y - viewFrom.y) * e,
+      k: viewFrom.k + (viewTo.k - viewFrom.k) * e
+    });
+    if (t < 1) {
+      arrangeAnim.raf = raf.call(window, step);
+    } else {
+      settle();
+    }
+  };
+  arrangeAnim = { raf: raf.call(window, step) };
 }
 
 function deleteBlock(id) {
@@ -430,6 +506,7 @@ function addBlock(type) {
 
 // -------------------------------------------------------------- recompute
 function recompute() {
+  cancelArrangeAnim();
   const evalResult = evaluateModel(model);
   values = evalResult.values;
   result = evalResult.result;

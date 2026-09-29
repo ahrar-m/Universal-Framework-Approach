@@ -173,11 +173,18 @@ ok('compact shrinks every card', groups().every(function (g) { return Number(g.q
 clickSel(doc.getElementById('btnCompact'));
 ok('expand restores every card', groups().every(function (g) { return Number(g.querySelector('rect').getAttribute('height')) > 100; }));
 
-clickSel(doc.getElementById('btnArrange'));
 function cardX(id) {
   const t = svg.querySelector('g[data-block="' + id + '"]').getAttribute('transform') || '';
   return Number(t.replace('translate(', '').split(' ')[0]);
 }
+clickSel(doc.getElementById('btnArrange'));
+const startXs = ids.map(cardX);
+await new Promise(function (r) { setTimeout(r, 300); });
+const midXs = ids.map(cardX);
+ok('arrange glides instead of snapping', midXs.join() !== startXs.join(), 'start ' + startXs.join() + ' mid ' + midXs.join());
+await new Promise(function (r) { setTimeout(r, 700); });
+const endXs = ids.map(cardX);
+ok('blocks are still travelling mid-glide', midXs.join() !== endXs.join(), 'mid ' + midXs.join() + ' end ' + endXs.join());
 ok('arrange orders the flow left to right', cardX(ids[0]) < cardX(ids[2]) && cardX(ids[2]) < cardX(ids[3]), [cardX(ids[0]), cardX(ids[2]), cardX(ids[3])].join(','));
 
 // dropping a loose wire on a card body wires it to that card's first free input

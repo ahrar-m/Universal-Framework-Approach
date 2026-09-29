@@ -623,20 +623,18 @@ export function createCanvas(opts) {
   svg.addEventListener('wheel', onWheel, { passive: false });
 
   // ------------------------------------------------------------------- api
-  function fit() {
-    const m = model();
+  // The pan/zoom that frames every visible block. Pass `targets` (id -> {x, y})
+  // to ask where the camera should settle once the blocks have moved there.
+  function fitView(targets) {
     const blocks = visibleBlocks();
     const size = svgSize();
     if (!blocks.length) {
-      view.k = 1;
-      view.x = size.w / 2 - 106;
-      view.y = size.h / 2 - 60;
-      render();
-      return;
+      return { k: 1, x: size.w / 2 - 106, y: size.h / 2 - 60 };
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const b of blocks) {
-      const r = blockRect(b);
+      const p = targets && targets[b.id] ? Object.assign({}, b, targets[b.id]) : b;
+      const r = blockRect(p);
       minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
       maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
     }
@@ -644,9 +642,18 @@ export function createCanvas(opts) {
     const bw = Math.max(1, maxX - minX);
     const bh = Math.max(1, maxY - minY);
     const k = Math.max(0.2, Math.min(1.4, Math.min((size.w - pad * 2) / bw, (size.h - pad * 2) / bh)));
-    view.k = k;
-    view.x = (size.w - bw * k) / 2 - minX * k;
-    view.y = (size.h - bh * k) / 2 - minY * k;
+    return {
+      k: k,
+      x: (size.w - bw * k) / 2 - minX * k,
+      y: (size.h - bh * k) / 2 - minY * k
+    };
+  }
+
+  function fit() {
+    const t = fitView();
+    view.k = t.k;
+    view.x = t.x;
+    view.y = t.y;
     render();
     opts.onView();
   }
@@ -659,6 +666,7 @@ export function createCanvas(opts) {
   return {
     render: render,
     fit: fit,
+    fitView: fitView,
     centerPoint: centerPoint,
     clientToCanvas: clientToCanvas,
     zoomBy: function (f) {
