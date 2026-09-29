@@ -15,6 +15,7 @@ tool tells you **which input actually drives the result**.
 | --- | --- |
 | Drag-and-connect canvas | Blocks are cards with ports; wires carry values; works with mouse and touch (tap a port, then tap the destination) |
 | Four block types | **Value input** (named number, unit, optional min/likely/max), **Operation** (add, subtract, multiply, divide, power, min, max, round, percent-of), **Formula** (typed expression over named inputs), **Result** (final outcome, optional display unit) |
+| Endless operation inputs | **Add, Multiply, Min and Max take any number of inputs** &mdash; grow or shrink the list with the block's <code>+ add input</code> row or the <code>Add input</code> button in Block settings. Empty ports are ignored, one connected input passes straight through, and every term is unit-checked. Subtract, Divide, Power, Round and Percent of keep their two ports |
 | Dimensional unit checking | Add/subtract require the same kind of quantity; multiply/divide combine units (`$/unit × units → $`); percentages scale without changing the unit; compatible units convert automatically (`30 min + 1 hr → 90 min`); incompatible mixes are refused in plain language |
 | Domain-agnostic units | Knows `$`, `k$`, `M$`, `%`, `x`, `units`, `users`, `customers`, `hrs`, `min`, `days`, `$/unit`, `units/hrs`, `$/hrs` — and any other word you type becomes its own unit |
 | Live values | Every block and wire shows its current value while you edit |

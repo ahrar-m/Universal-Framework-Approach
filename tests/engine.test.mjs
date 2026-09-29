@@ -173,18 +173,107 @@ function model(build) {
   ok('cycle rejected', r.errors.some((e) => e.indexOf('loop') >= 0), JSON.stringify(r.errors));
 }
 
-// unconnected port
+// unconnected port on a two-input operation
 {
   const m = model((m) => {
     const a = makeBlock('input', 0, 0); a.name = 'a'; a.value = 5;
-    const add = makeBlock('op', 200, 0); add.op = 'add';
+    const sub = makeBlock('op', 200, 0); sub.op = 'sub';
     const res = makeBlock('result', 400, 0);
-    m.blocks.push(a, add, res);
-    m.wires.push({ id: 'w1', from: a.id, to: add.id, toPort: 'a' });
-    m.wires.push({ id: 'w2', from: add.id, to: res.id, toPort: 'in' });
+    m.blocks.push(a, sub, res);
+    m.wires.push({ id: 'w1', from: a.id, to: sub.id, toPort: 'a' });
+    m.wires.push({ id: 'w2', from: sub.id, to: res.id, toPort: 'in' });
   });
   const r = evaluateModel(m);
   ok('unconnected port reported', !r.ok && r.errors.some((e) => e.indexOf('not connected') >= 0), JSON.stringify(r.errors));
+}
+
+// ---- variadic operations: add, mul, min, max fold over any number of inputs ----
+function variadicModel(op, terms, inputs) {
+  const m = model((m) => {
+    const opBlock = makeBlock('op', 200, 50); opBlock.op = op; opBlock.terms = terms.slice();
+    const res = makeBlock('result', 400, 50);
+    const srcs = inputs.map(function (spec, i) {
+      const b = makeBlock('input', 0, i * 100); b.name = spec.name; b.value = spec.value; b.unit = spec.unit || '';
+      m.wires.push({ id: 'w' + i, from: b.id, to: opBlock.id, toPort: terms[i] });
+      return b;
+    });
+    m.blocks.push.apply(m.blocks, srcs.concat([opBlock, res]));
+    m.wires.push({ id: 'wout', from: opBlock.id, to: res.id, toPort: 'in' });
+  });
+  return m;
+}
+
+{
+  const m = variadicModel('add', ['a', 'b', 'c'], [
+    { name: 'a', value: 30, unit: 'min' },
+    { name: 'b', value: 1, unit: 'hrs' },
+    { name: 'c', value: 30, unit: 'min' }
+  ]);
+  const r = evaluateModel(m);
+  ok('three-term add folds', r.ok && r.result.display === '120 min', (r.result && r.result.display) + ' ' + JSON.stringify(r.errors));
+}
+
+{
+  const m = variadicModel('add', ['a', 'b', 'c'], [{ name: 'only', value: 5, unit: '$' }]);
+  m.wires[0].toPort = 'c'; // wired into the last port: empty ports before it are ignored
+  const r = evaluateModel(m);
+  ok('single input passes through', r.ok && r.result.display === '$5', (r.result && r.result.display) + ' ' + JSON.stringify(r.errors));
+}
+
+{
+  const m = variadicModel('mul', ['a', 'b', 'c'], [
+    { name: 'a', value: 2 }, { name: 'b', value: 3 }, { name: 'c', value: 4 }
+  ]);
+  const r = evaluateModel(m);
+  ok('three-term multiply folds', r.ok && near(r.result.value, 24), (r.result && r.result.display) + ' ' + JSON.stringify(r.errors));
+}
+
+{
+  const m = variadicModel('min', ['a', 'b', 'c'], [
+    { name: 'a', value: 5 }, { name: 'b', value: 2 }, { name: 'c', value: 9 }
+  ]);
+  const r = evaluateModel(m);
+  ok('three-term minimum folds', r.ok && near(r.result.value, 2), (r.result && r.result.display) + ' ' + JSON.stringify(r.errors));
+}
+
+{
+  const m = variadicModel('max', ['a', 'b', 'c'], [
+    { name: 'a', value: 5 }, { name: 'b', value: 2 }, { name: 'c', value: 9 }
+  ]);
+  const r = evaluateModel(m);
+  ok('three-term maximum folds', r.ok && near(r.result.value, 9), (r.result && r.result.display) + ' ' + JSON.stringify(r.errors));
+}
+
+{
+  const m = variadicModel('add', ['a', 'b', 'c'], [
+    { name: 'money1', value: 5, unit: '$' },
+    { name: 'money2', value: 7, unit: '$' },
+    { name: 'time', value: 2, unit: 'hrs' }
+  ]);
+  const r = evaluateModel(m);
+  ok('variadic mismatch names the input', !r.ok && r.errors.some((e) => e.indexOf('different kinds') >= 0 && e.indexOf('input "c"') >= 0), JSON.stringify(r.errors));
+}
+
+{
+  const m = variadicModel('add', ['a', 'b'], []);
+  const r = evaluateModel(m);
+  ok('variadic op with nothing connected reports it', !r.ok && r.errors.some((e) => e.indexOf('not connected') >= 0), JSON.stringify(r.errors));
+}
+
+{
+  // models saved before variadic operations have no terms array
+  const m = model((m) => {
+    const a = makeBlock('input', 0, 0); a.name = 'a'; a.value = 3;
+    const b = makeBlock('input', 0, 100); b.name = 'b'; b.value = 4;
+    const add = makeBlock('op', 200, 50); add.op = 'add'; delete add.terms;
+    const res = makeBlock('result', 400, 50);
+    m.blocks.push(a, b, add, res);
+    m.wires.push({ id: 'w1', from: a.id, to: add.id, toPort: 'a' });
+    m.wires.push({ id: 'w2', from: b.id, to: add.id, toPort: 'b' });
+    m.wires.push({ id: 'w3', from: add.id, to: res.id, toPort: 'in' });
+  });
+  const r = evaluateModel(m);
+  ok('legacy model without terms works', r.ok && near(r.result.value, 7), (r.result && r.result.display) + ' ' + JSON.stringify(r.errors));
 }
 
 // validation

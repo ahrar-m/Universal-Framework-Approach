@@ -22,9 +22,10 @@ const model = {
     { id: 'in_vol', type: 'input', x: 0, y: 170, name: 'volume', value: 1200, unit: 'units', min: 800, likely: 1200, max: 1600 },
     { id: 'in_cost', type: 'input', x: 0, y: 340, name: 'cost', value: 18, unit: '$/unit', min: 15, likely: 18, max: 22 },
     { id: 'in_fixed', type: 'input', x: 0, y: 510, name: 'fixed', value: 9500, unit: '$' },
+    { id: 'in_fees', type: 'input', x: 0, y: 680, name: 'fees', value: 400, unit: '$' },
     { id: 'op_rev', type: 'op', x: 320, y: 60, op: 'mul', title: 'revenue' },
     { id: 'op_var', type: 'op', x: 320, y: 380, op: 'mul', title: 'variable cost' },
-    { id: 'op_tot', type: 'op', x: 630, y: 300, op: 'add', title: 'total cost' },
+    { id: 'op_tot', type: 'op', x: 630, y: 300, op: 'add', title: 'total cost', terms: ['a', 'b', 'c'] },
     { id: 'op_profit', type: 'op', x: 630, y: 60, op: 'sub', title: 'profit' },
     { id: 'res', type: 'result', x: 940, y: 130, title: 'Monthly profit', displayUnit: '$' }
   ],
@@ -35,6 +36,7 @@ const model = {
     { id: 'w4', from: 'in_vol', to: 'op_var', toPort: 'b' },
     { id: 'w5', from: 'op_var', to: 'op_tot', toPort: 'a' },
     { id: 'w6', from: 'in_fixed', to: 'op_tot', toPort: 'b' },
+    { id: 'w10', from: 'in_fees', to: 'op_tot', toPort: 'c' },
     { id: 'w7', from: 'op_rev', to: 'op_profit', toPort: 'a' },
     { id: 'w8', from: 'op_tot', to: 'op_profit', toPort: 'b' },
     { id: 'w9', from: 'op_profit', to: 'res', toPort: 'in' }

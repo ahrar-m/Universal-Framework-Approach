@@ -216,8 +216,8 @@
 
 <div class="card">
   <p class="chip chip-amber">Operation</p>
-  <h3>Two ports, one calculation</h3>
-  <p>An Operation performs exactly one of: <strong>Add, Subtract, Multiply, Divide, Power, Minimum, Maximum, Round, Percent of</strong>. It has two input ports, <code>a</code> and <code>b</code>, and the result is shown directly on the block.</p>
+  <h3>Two ports or twenty, one calculation</h3>
+  <p>An Operation performs exactly one of: <strong>Add, Subtract, Multiply, Divide, Power, Minimum, Maximum, Round, Percent of</strong>, and the result is shown directly on the block. Subtract, Divide, Power, Round and Percent of have two input ports, <code>a</code> and <code>b</code>. <strong>Add, Multiply, Minimum and Maximum take as many inputs as you like</strong>: press <code>+ add input</code> on the block (or <code>Add input</code> in Block settings) to grow the list, and every input is folded into the one result. Empty ports are ignored, a single connected input passes straight through, and every term is checked to be the same kind of quantity.</p>
   <p class="muted">Example: a <strong>Multiply</strong> block with <code>a</code> = price (49) and <code>b</code> = volume (1,200) shows <code>58,800</code>.</p>
 </div>
 
@@ -352,7 +352,7 @@
   </li>
   <li><strong>Wire revenue.</strong> Drag from the output port (the round dot on the right of the <code>price</code> block) to an input port (a round dot on the left) of a new <code>Operation</code> block; then wire <code>volume</code> into the second input port. In Block settings set <code>Title</code> to <code>revenue</code> and <code>Operation</code> to <code>Multiply</code>. The block shows <code>58,800</code>.</li>
   <li><strong>Wire variable cost.</strong> Add another <code>Operation</code>: <code>cost per unit</code> x <code>volume</code>, <code>Operation</code> = <code>Multiply</code>, <code>Title</code> = <code>variable cost</code>. It shows <code>21,600</code>.</li>
-  <li><strong>Wire total cost.</strong> Add an <code>Operation</code> with <code>Title</code> <code>total cost</code>, <code>Operation</code> = <code>Add</code>, wired from <code>variable cost</code> and <code>fixed costs</code>. It shows <code>31,100</code>.</li>
+  <li><strong>Wire total cost.</strong> Add an <code>Operation</code> with <code>Title</code> <code>total cost</code>, <code>Operation</code> = <code>Add</code>, wired from <code>variable cost</code> and <code>fixed costs</code>. It shows <code>31,100</code>. Add takes as many inputs as you like &mdash; press <code>+ add input</code> on the block and a third cost (fees, shipping, royalties) can fold straight into the total instead of chaining another Add block.</li>
   <li><strong>Wire profit into the Result.</strong> Add an <code>Operation</code> with <code>Title</code> <code>profit</code>, <code>Operation</code> = <code>Subtract</code>, with <code>revenue</code> as <code>a</code> and <code>total cost</code> as <code>b</code>. It shows <code>27,700</code>. Then add a <code>Result</code> block and wire <code>profit</code> into it. In Block settings the Result has <code>Title</code> and <code>Display unit</code>: set Title to <code>Monthly profit</code> and Display unit to <code>$</code>. The result reads <code>$27,700</code>.</li>
   <li><strong>Check the numbers.</strong> Every block should now agree:
     <div class="tbl-wrap">

@@ -1,5 +1,5 @@
 // canvas.js — SVG node-graph rendering and pointer interaction (mouse + touch).
-import { blockPorts, blockTitle, blockHasOutput, OPS } from './engine.js';
+import { blockPorts, blockTitle, blockHasOutput, OPS, isVariadicOp } from './engine.js';
 import { formatValue } from './units.js';
 
 export const TYPE_META = {
@@ -44,9 +44,10 @@ export function blockGeometry(block) {
   const headerH = 42;
   const rowH = 27;
   const footerH = block.type === 'result' ? 58 : block.type === 'formula' ? 52 : 42;
-  const rows = Math.max(1, ports.length);
+  const addRow = block.type === 'op' && isVariadicOp(block.op) ? 1 : 0;
+  const rows = Math.max(1, ports.length) + addRow;
   const h = headerH + rows * rowH + footerH;
-  return { w: w, h: h, headerH: headerH, rowH: rowH, footerH: footerH, rows: rows, ports: ports };
+  return { w: w, h: h, headerH: headerH, rowH: rowH, footerH: footerH, rows: rows, ports: ports, addRow: addRow };
 }
 
 export function portPoint(block, portId) {
@@ -207,6 +208,13 @@ export function createCanvas(opts) {
       out.push('<circle cx="0" cy="' + py + '" r="2" fill="' + meta.color + '" pointer-events="none" />');
     }
 
+    // add-input affordance for operations that take any number of inputs
+    if (g.addRow) {
+      const ay = g.headerH + g.ports.length * g.rowH + g.rowH / 2;
+      out.push('<rect x="12" y="' + (ay - 11) + '" width="' + (g.w - 24) + '" height="22" rx="8" fill="rgba(246,173,85,0.08)" stroke="rgba(246,173,85,0.3)" stroke-dasharray="4 4" data-addterm="1" data-block="' + esc(block.id) + '" style="cursor:pointer"><title>Add another input</title></rect>');
+      out.push('<text x="' + (g.w / 2) + '" y="' + (ay + 4) + '" text-anchor="middle" font-family="' + MONO + '" font-size="10.5" fill="#f6ad55" opacity="0.9" pointer-events="none">+ add input</text>');
+    }
+
     // output port
     if (blockHasOutput(block)) {
       const oy = g.h / 2;
@@ -265,6 +273,8 @@ export function createCanvas(opts) {
       if (port) return { kind: 'port', blockId: port.getAttribute('data-block'), portId: port.getAttribute('data-portid'), dir: port.getAttribute('data-dir') };
       const wire = el.closest('[data-wire]');
       if (wire) return { kind: 'wire', id: wire.getAttribute('data-wire') };
+      const add = el.closest('[data-addterm]');
+      if (add) return { kind: 'addterm', id: add.getAttribute('data-block') };
       const block = el.closest('[data-block]');
       if (block) return { kind: 'block', id: block.getAttribute('data-block') };
     }
@@ -303,11 +313,11 @@ export function createCanvas(opts) {
       render();
       return;
     }
-    if (hit.kind === 'block') {
+    if (hit.kind === 'block' || hit.kind === 'addterm') {
       const block = model().blocks.find(function (b) { return b.id === hit.id; });
       if (!block) return;
       selection = { kind: 'block', id: hit.id };
-      gesture = { kind: 'block', id: hit.id, dx: pt.x - block.x, dy: pt.y - block.y, moved: false };
+      gesture = { kind: 'block', id: hit.id, dx: pt.x - block.x, dy: pt.y - block.y, moved: false, addTerm: hit.kind === 'addterm' };
       opts.onSelect(hit.id);
       render();
       return;
@@ -389,6 +399,7 @@ export function createCanvas(opts) {
       selection = null;
       opts.onSelect(null);
     } else if (kind === 'block' && isTap) {
+      if (gesture.addTerm && opts.addInput) opts.addInput(gesture.id);
       opts.onSelect(gesture.id);
     }
     gesture = null;

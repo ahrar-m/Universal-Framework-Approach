@@ -5,18 +5,37 @@ import { parseUnit, combineMul, combineDiv, powUnit, sameDims, isRatio, dimensio
 import { parseExpr, collectNames, roundTo, FUNCTIONS } from './expr.js';
 
 export const OPS = {
-  add: { label: 'Add', symbol: '+', ports: ['a', 'b'] },
+  add: { label: 'Add', symbol: '+', ports: ['a', 'b'], variadic: true },
   sub: { label: 'Subtract', symbol: '−', ports: ['a', 'b'] },
-  mul: { label: 'Multiply', symbol: '×', ports: ['a', 'b'] },
+  mul: { label: 'Multiply', symbol: '×', ports: ['a', 'b'], variadic: true },
   div: { label: 'Divide', symbol: '÷', ports: ['a', 'b'] },
   pow: { label: 'Power', symbol: '^', ports: ['a', 'b'] },
-  min: { label: 'Minimum', symbol: 'min', ports: ['a', 'b'] },
-  max: { label: 'Maximum', symbol: 'max', ports: ['a', 'b'] },
+  min: { label: 'Minimum', symbol: 'min', ports: ['a', 'b'], variadic: true },
+  max: { label: 'Maximum', symbol: 'max', ports: ['a', 'b'], variadic: true },
   round: { label: 'Round', symbol: 'rnd', ports: ['a', 'b'] },
   pct: { label: 'Percent of', symbol: '%', ports: ['a', 'b'] }
 };
 
 export const BLOCK_TYPES = ['input', 'op', 'formula', 'result'];
+
+// Add, Multiply, Minimum and Maximum fold over any number of inputs; the other
+// operations keep their two fixed ports.
+export function isVariadicOp(op) {
+  return !!(OPS[op] && OPS[op].variadic);
+}
+
+// Input port ids of an Operation block: a, b, c, ...
+// Models saved before variadic operations have no terms array and mean ['a', 'b'].
+export function opTerms(block) {
+  const raw = Array.isArray(block.terms) && block.terms.length
+    ? block.terms
+    : ((block.op && OPS[block.op]) ? OPS[block.op].ports : ['a', 'b']);
+  return raw.map(function (t) { return typeof t === 'string' ? t : ((t && t.id) || 'x'); });
+}
+
+export function termLabel(index) {
+  return index < 26 ? String.fromCharCode(97 + index) : 'in ' + (index + 1);
+}
 
 export function newId(prefix) {
   return prefix + '_' + Math.random().toString(36).slice(2, 9);
@@ -43,6 +62,7 @@ export function makeBlock(type, x, y) {
   } else if (type === 'op') {
     base.op = 'add';
     base.title = 'Add';
+    base.terms = ['a', 'b'];
   } else if (type === 'formula') {
     base.title = 'Formula';
     base.expr = '';
@@ -56,7 +76,7 @@ export function makeBlock(type, x, y) {
 export function blockPorts(block) {
   if (block.type === 'input') return [];
   if (block.type === 'result') return [{ id: 'in', label: 'in' }];
-  if (block.type === 'op') return [{ id: 'a', label: 'a' }, { id: 'b', label: 'b' }];
+  if (block.type === 'op') return opTerms(block).map(function (id, i) { return { id: id, label: termLabel(i) }; });
   return (block.inputs || []).map(function (p) { return { id: p.id, label: p.name }; });
 }
 
@@ -253,20 +273,45 @@ export function evaluateModel(model, overrides) {
     }
     if (block.type === 'op') {
       const op = block.op || 'add';
-      const a = portValue(block, 'a');
-      const needsB = op !== 'pct' || true;
-      const b = portValue(block, 'b');
-      void needsB;
-      switch (op) {
-        case 'add': {
-          requireSame(a, b, 'add');
-          return { v: a.v + b.v, u: pickUnit(a.u, b.u) };
+      const terms = opTerms(block);
+      if (isVariadicOp(op)) {
+        // Fold every connected input; empty ports are ignored and a single
+        // connected input passes straight through.
+        const vals = [];
+        for (const id of terms) {
+          const wire = wireInto(model, block.id, id);
+          if (!wire) continue;
+          const up = evalBlock(wire.from);
+          if (up.error) throw new Error(up.error);
+          vals.push({ v: up.v, u: up.u, at: id });
         }
+        if (!vals.length) {
+          throw new Error('Port "' + termLabel(0) + '" of "' + blockTitle(block) + '" is not connected — this ' + OPS[op].label + ' block needs at least one connected input.');
+        }
+        if (vals.length === 1) return { v: vals[0].v, u: vals[0].u };
+        let acc = vals[0];
+        for (let i = 1; i < vals.length; i++) {
+          const x = vals[i];
+          const where = 'on input "' + portLabel(block, x.at) + '"';
+          if (op === 'mul') {
+            acc = { v: acc.v * x.v, u: combineMul(acc.u, x.u) };
+          } else if (op === 'add') {
+            requireSame(acc, x, 'add', where);
+            acc = { v: acc.v + x.v, u: pickUnit(acc.u, x.u) };
+          } else {
+            requireSame(acc, x, 'compare', where);
+            acc = { v: op === 'min' ? Math.min(acc.v, x.v) : Math.max(acc.v, x.v), u: acc.u };
+          }
+        }
+        return acc;
+      }
+      const a = portValue(block, terms[0] || 'a');
+      const b = portValue(block, terms[1] || 'b');
+      switch (op) {
         case 'sub': {
           requireSame(a, b, 'subtract');
           return { v: a.v - b.v, u: pickUnit(a.u, b.u) };
         }
-        case 'mul': return { v: a.v * b.v, u: combineMul(a.u, b.u) };
         case 'div': {
           if (b.v === 0) throw new Error('Division by zero in "' + blockTitle(block) + '"');
           return { v: a.v / b.v, u: combineDiv(a.u, b.u) };
@@ -278,14 +323,6 @@ export function evaluateModel(model, overrides) {
             throw new Error('A fractional power needs a plain-number base');
           }
           return { v: Math.pow(a.v, n), u: powUnit(a.u, n) };
-        }
-        case 'min': {
-          requireSame(a, b, 'compare');
-          return { v: Math.min(a.v, b.v), u: a.u };
-        }
-        case 'max': {
-          requireSame(a, b, 'compare');
-          return { v: Math.max(a.v, b.v), u: a.u };
         }
         case 'round': {
           const digits = isRatio(b.u) ? b.v : 0;
@@ -324,9 +361,9 @@ export function evaluateModel(model, overrides) {
     throw new Error('Unknown block type "' + block.type + '"');
   }
 
-  function requireSame(a, b, verb) {
+  function requireSame(a, b, verb, where) {
     if (!sameDims(a.u, b.u)) {
-      throw new Error('Cannot ' + verb + ' ' + describeUnit(a.u) + ' and ' + describeUnit(b.u) + ' — they are different kinds of quantity. Check the unit labels: is one a total and the other a per-unit rate?');
+      throw new Error('Cannot ' + verb + ' ' + describeUnit(a.u) + ' and ' + describeUnit(b.u) + (where ? ' ' + where : '') + ' — they are different kinds of quantity. Check the unit labels: is one a total and the other a per-unit rate?');
     }
   }
 
@@ -398,6 +435,10 @@ export function portLabel(block, portId) {
   if (block.type === 'formula') {
     const p = (block.inputs || []).filter(function (x) { return x.id === portId; })[0];
     return p ? p.name : portId;
+  }
+  if (block.type === 'op') {
+    const index = opTerms(block).indexOf(portId);
+    return index >= 0 ? termLabel(index) : portId;
   }
   return portId;
 }

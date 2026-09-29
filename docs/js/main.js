@@ -1,5 +1,5 @@
 // main.js — application controller: palette, inspector, sensitivity, persistence.
-import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, newId } from './engine.js';
+import { evaluateModel, sensitivity, validateModel, makeBlock, defaultModel, blockTitle, OPS, blockPorts, newId, isVariadicOp, opTerms, termLabel } from './engine.js';
 import { COMMON_UNITS, formatValue, formatNumber } from './units.js';
 import { createCanvas, blockRect } from './canvas.js';
 import { exportSvg, exportPng, exportJson, importJson } from './exporter.js';
@@ -95,6 +95,10 @@ const canvasView = createCanvas({
     connectPorts(fromId, fromPort, fromDir, toId, toPort, toDir);
   },
   deleteBlock: function (id) { deleteBlock(id); },
+  addInput: function (id) {
+    const block = findBlock(id);
+    if (block && block.type === 'op' && isVariadicOp(block.op)) addOpInput(block);
+  },
   deleteWire: function (id) {
     model.wires = model.wires.filter(function (w) { return w.id !== id; });
     saveSoon();
@@ -324,7 +328,19 @@ function settingsHtml(block) {
       return '<option value="' + key + '"' + (block.op === key ? ' selected' : '') + '>' + OPS[key].label + '</option>';
     }).join('');
     html += field('Operation', '<select data-field="op">' + options + '</select>');
-    html += '<div class="field-hint">The left port is <code>a</code>, the right port is <code>b</code>. Add and subtract require the same kind of quantity; multiply and divide combine units.</div>';
+    if (isVariadicOp(block.op)) {
+      const terms = opTerms(block);
+      html += '<div class="field"><label>Inputs</label>';
+      terms.forEach(function (id, index) {
+        html += '<div class="formula-input-row"><span class="port-tag">' + escapeHtml(termLabel(index)) + '</span>' +
+          (terms.length > 1 ? '<button type="button" class="icon-btn" data-removeterm="' + index + '" title="Remove input">×</button>' : '') +
+          '</div>';
+      });
+      html += '<button type="button" class="btn" data-addterm="1">Add input</button></div>';
+      html += '<div class="field-hint">' + OPS[block.op].label + ' takes as many inputs as you like &mdash; use <code>Add input</code> here or the <code>+ add input</code> row on the block. Empty ports are ignored, and one connected input passes straight through. Every input must be the same kind of quantity.</div>';
+    } else {
+      html += '<div class="field-hint">This operation takes two inputs: the left port is <code>a</code>, the right port is <code>b</code>. Add, subtract, min and max need the same kind of quantity; multiply and divide combine units.</div>';
+    }
   } else if (block.type === 'formula') {
     html += field('Title', '<input type="text" data-field="title" value="' + escapeHtml(block.title || '') + '" spellcheck="false">');
     html += '<div class="field"><label>Inputs</label>';
@@ -381,6 +397,17 @@ function bindSettings(block) {
       recompute();
     });
   });
+  const addTerm = body.querySelector('[data-addterm]');
+  if (addTerm) {
+    addTerm.addEventListener('click', function () {
+      addOpInput(block);
+    });
+  }
+  body.querySelectorAll('[data-removeterm]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      removeOpInput(block, Number(btn.getAttribute('data-removeterm')));
+    });
+  });
   const del = body.querySelector('[data-delete]');
   if (del) {
     del.addEventListener('click', function () {
@@ -389,6 +416,34 @@ function bindSettings(block) {
   }
   body.addEventListener('input', onSettingsInput);
   body.addEventListener('change', onSettingsInput);
+}
+
+function freeTermId(terms) {
+  for (let i = 0; i < 26; i++) {
+    const letter = String.fromCharCode(97 + i);
+    if (terms.indexOf(letter) < 0) return letter;
+  }
+  return newId('t');
+}
+
+function addOpInput(block) {
+  const terms = opTerms(block).slice();
+  terms.push(freeTermId(terms));
+  block.terms = terms;
+  renderSettings(block.id);
+  saveSoon();
+  recompute();
+}
+
+function removeOpInput(block, index) {
+  const terms = opTerms(block).slice();
+  if (terms.length <= 1) return;
+  const removed = terms.splice(index, 1)[0];
+  block.terms = terms;
+  model.wires = model.wires.filter(function (w) { return !(w.to === block.id && w.toPort === removed); });
+  renderSettings(block.id);
+  saveSoon();
+  recompute();
 }
 
 function uniqueName(block, base) {
@@ -410,6 +465,17 @@ function onSettingsInput(e) {
       block[field] = raw === '' ? null : Number(raw);
     } else {
       block[field] = el.value;
+    }
+    if (field === 'op') {
+      // a two-input operation keeps only its first two inputs
+      if (!isVariadicOp(block.op)) {
+        const terms = opTerms(block).slice(0, 2);
+        const kept = {};
+        for (const t of terms) kept[t] = true;
+        block.terms = terms;
+        model.wires = model.wires.filter(function (w) { return !(w.to === block.id && !kept[w.toPort]); });
+      }
+      renderSettings(block.id);
     }
     saveSoon();
     recompute();

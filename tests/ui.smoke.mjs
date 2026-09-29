@@ -129,6 +129,23 @@ await new Promise(function (r) { setTimeout(r, 400); });
 const stored = JSON.parse(localStorage.getItem('ufa.model.v1') || 'null');
 ok('model autosaved', !!stored && stored.blocks.length === 4, JSON.stringify(stored ? stored.blocks.length : null));
 
+// variadic operation: endless inputs on Add / Multiply / Min / Max
+const mulId = ids[2];
+const addRow = svg.querySelector('g[data-block="' + mulId + '"] [data-addterm]');
+ok('op card offers an add-input row', !!addRow);
+ok('result card has no add-input row', !svg.querySelector('g[data-block="' + ids[3] + '"] [data-addterm]'));
+firePointer(addRow, 'pointerdown', 100, 100);
+// the canvas re-renders on pointerdown, so release on the live node
+firePointer(svg.querySelector('g[data-block="' + mulId + '"] [data-addterm]'), 'pointerup', 100, 100);
+ok('add-input row adds a port', !!port(mulId, 'c'), svg.innerHTML.indexOf('data-portid="c"') >= 0 ? '' : 'no c port');
+ok('inspector lists three inputs', doc.querySelectorAll('#settingsBody [data-removeterm]').length === 3, String(doc.querySelectorAll('#settingsBody [data-removeterm]').length));
+wire(ids[0], mulId, 'c');
+ok('three-term product computed', doc.getElementById('sensitivityBody').innerHTML.indexOf('2,500,000') >= 0, doc.getElementById('sensitivityBody').innerHTML.slice(0, 200));
+const wiresWithC = (svg.innerHTML.match(/data-wire=/g) || []).length;
+clickSel(doc.querySelector('#settingsBody [data-removeterm="2"]'));
+ok('removing an input drops its port and wire', !port(mulId, 'c') && (svg.innerHTML.match(/data-wire=/g) || []).length === wiresWithC - 1, String((svg.innerHTML.match(/data-wire=/g) || []).length));
+ok('value returns after removing the term', doc.getElementById('sensitivityBody').innerHTML.indexOf('$50,000') >= 0, doc.getElementById('sensitivityBody').innerHTML.slice(0, 200));
+
 // formula block with named inputs
 palette('formula');
 const fid = groups()[groups().length - 1].getAttribute('data-block');
